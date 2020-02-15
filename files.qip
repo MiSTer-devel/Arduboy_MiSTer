@@ -1,0 +1,4 @@
+set_global_assignment -name SYSTEMVERILOG_FILE Arduboy.sv
+set_global_assignment -name VERILOG_FILE vgaHdmi.v
+set_global_assignment -name VERILOG_FILE pll_50m.v
+set_global_assignment -name VERILOG_FILE atmega32u4.v
