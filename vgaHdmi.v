@@ -18,31 +18,29 @@ Editor : sublime text3, tab size (2)
 // **Info Source**
 // https://eewiki.net/pages/viewpage.action?pageId=15925278
 
-module vgaHdmi(
-  input clock, clock100,
+module vgaHdmi
+(
+  input clock,
   input reset,
   input oled_dc,
   input oled_clk,
   input oled_data,
+
+  output reg ce_pix,
   output reg hsync, vsync,
-  output hblank, vblank,
-  output pixelValue
+  output reg hblank, vblank,
+  output reg pixelValue
 );
 
-assign hblank = (pixelH > 640);
-assign vblank = (pixelV > 480);
+reg  [7:0] mem [1024];
+reg  [9:0] waddr, raddr;
 
-reg [7:0] mem [0:1023];
-reg [9:0] waddr;
+reg        invert;
+reg  [2:0] shiftCount;
+reg  [7:0] shiftReg;
+wire [7:0] shiftLeft = {shiftReg[6:0], oled_data};
 
-reg invert;
-reg [2:0] shiftCount;
-reg [7:0] shiftReg;
-wire [7:0] shiftLeft;
-assign shiftLeft = {shiftReg[6:0], oled_data};
-
-always @ (posedge oled_clk or posedge reset)
-begin
+always @ (posedge oled_clk or posedge reset) begin
   if(reset) begin
     waddr         <= 0;
     invert        <= 0;
@@ -60,18 +58,8 @@ begin
     end
     else begin // commands
       if (shiftCount == 3'b111) begin
-        case (shiftLeft)
-          8'hA7 : invert <= 1'b1; // All pixels inverted
-          8'hA6 : invert <= 1'b0; // All pixels normal
-          8'hB0 : waddr <= 10'd0; // 'VSYNC' / Page 0
-          8'hB1 : waddr <= 10'd128;
-          8'hB2 : waddr <= 10'd256;
-          8'hB3 : waddr <= 10'd384;
-          8'hB4 : waddr <= 10'd512;
-          8'hB5 : waddr <= 10'd640;
-          8'hB6 : waddr <= 10'd768;
-          8'hB7 : waddr <= 10'd896;
-        endcase
+			if(shiftLeft[7:1] == 'b1010011) invert <= shiftLeft[0]; // invert (A6/A7)
+			if(shiftLeft[7:3] == 'b10110) waddr <= {shiftLeft[2:0], 7'b000_0000}; //page 0-7 (B0-B7)
       end
       else shiftReg <= shiftLeft;
       shiftCount <= shiftCount + 1'b1;
@@ -79,91 +67,58 @@ begin
   end
 end
 
-always @ (posedge clock100)
-begin
-  tempByte <= mem[bytePosition];
+wire [7:0] tempByte = mem[raddr];
+
+reg ce_pix_pre, ce_pix_int;
+always @ (posedge clock) begin
+	reg [2:0] div;
+
+	div <= div + 1'd1;
+
+	ce_pix_pre <= !div;
+	ce_pix_int <= !div[1:0] & div[2];
+	ce_pix     <= !div[1:0]; //twice higher pixel clock to fit OSD on VGA/DV
 end
-
-always @*
-begin
-  case (pixelY[5:3])
-    3'd0 : pixelZ = 10'd0;
-    3'd1 : pixelZ = 10'd128;
-    3'd2 : pixelZ = 10'd256;
-    3'd3 : pixelZ = 10'd384;
-    3'd4 : pixelZ = 10'd512;
-    3'd5 : pixelZ = 10'd640;
-    3'd6 : pixelZ = 10'd768;
-    3'd7 : pixelZ = 10'd896;
-    default : pixelZ = 10'd0;
-  endcase
-end
-
-wire dataEnable;
-reg  invertLatched;
-reg  [9:0] pixelZ;
-wire [6:0] pixelX;
-wire [5:0] pixelY;
-wire [2:0] bitPosition;
-wire [9:0] bytePosition;
-reg  [7:0] tempByte;
-assign pixelX = pixelH / 5;
-assign pixelY = pixelV_offset / 5;
-assign bitPosition = (pixelY & 3'd7);
-assign bytePosition = pixelZ + pixelX;
-assign pixelValue = (dataEnable) ? ((invertLatched) ? ~tempByte[bitPosition] : tempByte[bitPosition]) : 1'b0;
-assign dataEnable = (pixelH > 0 && pixelH < 640 && pixelV_offset > 0 && pixelV_offset < 320) ? 1'b1 : 1'b0;
-
-reg [9:0] pixelH, pixelV, pixelV_offset; // estado interno de pixeles del modulo
 
 // Manejo de Pixeles y Sincronizacion
+always @ (posedge clock) begin
+	reg       invertLatched;
+	reg       old_ce;
+	reg [2:0] vdiv;
+	reg [7:0] pixelH, pixelV;
 
-always @ (posedge clock or posedge reset) begin
-  if(reset) begin
-    hsync         <= 0;
-    vsync         <= 0;
-    pixelH        <= 0;
-    pixelV        <= 0;
-    pixelV_offset <= 0;
-    invertLatched <= 0;
-  end
-  else begin
-    // Display Horizontal
-    if(pixelH==0 && pixelV!=524) begin
-      pixelH <= pixelH + 1'b1;
-      pixelV <= pixelV + 1'b1;
-      if(pixelV==80) begin
-        pixelV_offset <= 0;
-        invertLatched <= invert;
-      end
-      else pixelV_offset <= pixelV_offset + 1'b1;
-    end
-    else if(pixelH==0 && pixelV==524) begin
-      pixelH <= pixelH + 1'b1;
-      pixelV <= 0; // pixel 525
-    end
-    else if(pixelH<=640) pixelH <= pixelH + 1'b1;
-    // Front Porch
-    else if(pixelH<=656) pixelH <= pixelH + 1'b1;
-    // Sync Pulse
-    else if(pixelH<=752) begin
-      pixelH <= pixelH + 1'b1;
-      hsync  <= 1;
-    end
-    // Back Porch
-    else if(pixelH<799) begin
-      pixelH <= pixelH+1'b1;
-      hsync  <= 0;
-    end
-    else pixelH<=0; // pixel 800
+	old_ce <= ce_pix_pre;
 
-    // Manejo Senal Vertical
-    // Sync Pulse
-    if(pixelV == 491 || pixelV == 492)
-      vsync <= 1;
-    else
-      vsync <= 0;
-  end
+	if (ce_pix_pre) begin
+		pixelH <= pixelH + 1'b1;
+		if(pixelH == 159) begin
+			pixelH <= 0;
+			vdiv <= vdiv + 1'd1;
+			if(vdiv[2]) begin
+				vdiv <= 0;
+				pixelV <= pixelV + 1'd1;
+				if(pixelV == 104) begin
+					invertLatched <= invert;
+					pixelV <= 0;
+				end
+			end
+		end
+	end
+
+	if (old_ce) raddr <= {pixelV[5:3],pixelH[6:0]};
+
+	if (ce_pix_int) begin
+		pixelValue <= invertLatched ^ tempByte[pixelV[2:0]];
+
+		if(pixelV == 0)   vblank <= 0;
+		if(pixelV == 64)  vblank <= 1;
+		if(pixelV == 82)  vsync  <= !vdiv[2];
+
+		if(pixelH == 0)   hblank <= 0;
+		if(pixelH == 128) hblank <= 1;
+		if(pixelH == 132) hsync  <= 1;
+		if(pixelH == 147) hsync  <= 0;
+	end
 end
 
 endmodule

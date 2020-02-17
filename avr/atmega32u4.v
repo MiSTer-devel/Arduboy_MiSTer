@@ -20,17 +20,6 @@
 
 `timescale 1ns / 1ps
 
-`include "alu.v"
-`include "atmega_eep.v"
-`include "atmega_pio.v"
-`include "atmega_pll.v"
-`include "atmega_spi_m.v"
-`include "atmega_tim_8bit.v"
-`include "atmega_tim_10bit.v"
-`include "atmega_tim_16bit.v"
-`include "mem.v"
-`include "reg.v"
-`include "xmega.v"
 `include "xmega_v.v"
 
 `define PLATFORM "XILINX"
