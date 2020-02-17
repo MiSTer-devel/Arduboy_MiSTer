@@ -73,7 +73,7 @@ begin
     end
 end
 
-always @ (posedge rst or posedge clk)
+always @ (posedge clk)
 begin
     if(rst)
     begin

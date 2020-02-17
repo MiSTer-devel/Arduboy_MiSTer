@@ -78,7 +78,7 @@ module tim_013_prescaller (
 );
 reg [9:0]cnt;
 
-always @ (posedge rst or posedge clk)
+always @ (posedge clk)
 begin
     if(rst)
     begin

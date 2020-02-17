@@ -184,6 +184,14 @@ begin
     end
 end
 
+always @ (posedge clk)
+begin
+    if(rst)
+        tim_clk_2 <= 1'b0;
+    else
+        tim_clk_2 <= ~tim_clk_2;
+end
+
 always @*
 begin
     bus_out = 8'h00;
@@ -198,7 +206,7 @@ begin
 end
 
 assign usb_ck_out = USE_PLL != "TRUE" ? 1'b0 : (PLLFRQ[6] ? usb_clk_2_int : pll_clk_out_int);
-assign tim_ck_out = USE_PLL != "TRUE" ? clk : (PLLFRQ[5:4] == 2'b00 ? clk : (PLLFRQ[5:4] == 2'b01 ? pll_clk_out_int : (PLLFRQ[5:4] == 2'b11 ? tim_div_cnt[1] : tim_div_cnt[0])));
+assign tim_ck_out = USE_PLL != "TRUE" ? (PLLCSR[4] ? tim_clk_2 : clk) : (PLLFRQ[5:4] == 2'b00 ? (PLLCSR[4] ? tim_clk_2 : clk) : (PLLFRQ[5:4] == 2'b01 ? pll_clk_out_int : (PLLFRQ[5:4] == 2'b11 ? tim_div_cnt[1] : tim_div_cnt[0])));
 assign pll_enabled = USE_PLL != "TRUE" ? 1'b0 : (|PLLFRQ[5:4]);
 
 endmodule

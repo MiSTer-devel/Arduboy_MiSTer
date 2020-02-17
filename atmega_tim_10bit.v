@@ -184,17 +184,8 @@ wire clk_active = |TCCRB[`CS03:`CS00];
 
 /* Prescaller */
 reg [13:0]presc_cnt;
-reg from_core_clk_div;
 
-always @ (posedge rst or posedge clk_pll)
-begin
-    if(rst)
-        from_core_clk_div <= 2'h0;
-    else
-        from_core_clk_div <= from_core_clk_div + 2'h1;
-end
-
-always @(posedge rst or posedge pll_enabled ? clk_pll : from_core_clk_div)
+always @(posedge rst or posedge clk_pll)
 begin
     if(rst)
     begin
@@ -208,14 +199,14 @@ end
 /* !Prescaller */
 
 /* Prescaller selection implementation */
-wire [15:0]tim_clks = {presc_cnt, pll_enabled ? clk_pll : from_core_clk_div, 1'b0};
-always @ *
+wire [15:0]tim_clks = {presc_cnt, clk_pll, 1'b0};
+always @*
 begin
     clk_int = tim_clks[TCCRB[`CS03:`CS00]];
 end
 reg updt_ocr_on_top;
 reg updt_ocr_on_bottom;
-always @ *
+always @*
 begin
     casex({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
         3'b0xx: // Imediate.
@@ -237,13 +228,13 @@ begin
 end
 
 reg [10:0]top_value;
-always @ *
+always @*
 begin
     top_value = OCRC_int;
 end
 
 reg [10:0]t_ovf_value;
-always @ *
+always @*
 begin
     case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
         3'b101, 3'b111: t_ovf_value = 10'h000;
@@ -252,7 +243,7 @@ begin
 end
 
 // Read registers.
-always @ *
+always @*
 begin
     if(rst)
     begin
@@ -409,7 +400,7 @@ begin
 end
 
 /* Set "oc" pin on specified conditions*/
-always @ (posedge rst or posedge clk_pll)
+always @ (posedge rst or posedge pll_enabled ? clk_pll : clk)
 begin
     if(rst)
     begin
@@ -497,7 +488,7 @@ begin
         end
         // Sample one IO core clock once every prescaller positive edge clock.
         clk_int_del <= clk_int; // Shift prescaller clock to a delay register every IO core positive edge clock to detect prescaller positive edges.
-        if(((~clk_int_del & clk_int) || (TCCRB[`CS03:`CS00] == 4'b0001 & pll_enabled)) && TCCRB[`CS03:`CS00] != 4'b0000) // If prescaller is 1 we bypass the prescaller clock edge detector, if 0, we disable the timer, if pll is disabled, the counter clock is maximum clk/2.
+        if(((~clk_int_del & clk_int) || TCCRB[`CS03:`CS00] == 4'b0001) && TCCRB[`CS03:`CS00] != 4'b0000) // If prescaller is 1 we bypass the prescaller clock edge detector, if 0, we disable the timer, if pll is disabled, the counter clock is maximum clk/2.
         begin
             if(up_count)
             begin

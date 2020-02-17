@@ -165,7 +165,8 @@ reg [15:0]OCRD_int;
 reg [7:0]TIMSK;
 reg [7:0]TIFR;
 
-reg [7:0]TMP_REG;
+reg [7:0]TMP_REG_rd;
+reg [7:0]TMP_REG_wr;
 
 reg tov_p;
 reg tov_n;
@@ -326,7 +327,7 @@ begin
                 TCNTH_ADDR:
                 begin
                     if(TCNTH_ADDR < 'h40)
-                        bus_io_out = TMP_REG;
+                        bus_io_out = TMP_REG_rd;
                 end
                 ICRL_ADDR:
                 begin
@@ -336,7 +337,7 @@ begin
                 ICRH_ADDR:
                 begin
                     if(ICRH_ADDR < 'h40)
-                        bus_io_out = TMP_REG;
+                        bus_io_out = TMP_REG_rd;
                 end
                 OCRAL_ADDR:
                 begin
@@ -427,7 +428,7 @@ begin
                 TCNTH_ADDR:
                 begin
                     if(TCNTH_ADDR >= 'h40)
-                        bus_dat_out = TMP_REG;
+                        bus_dat_out = TMP_REG_rd;
                 end
                 ICRL_ADDR:
                 begin
@@ -437,7 +438,7 @@ begin
                 ICRH_ADDR:
                 begin
                     if(ICRH_ADDR >= 'h40)
-                        bus_dat_out = TMP_REG;
+                        bus_dat_out = TMP_REG_rd;
                 end
                 OCRAL_ADDR:
                 begin
@@ -496,11 +497,12 @@ begin
 end
 
 /* Set "oc" pin on specified conditions*/
-always @ (posedge rst or posedge clk)
+always @ (posedge clk)
 begin
     if(rst)
     begin
-        TMP_REG <= 8'h00;
+        TMP_REG_rd <= 8'h00;
+        TMP_REG_wr <= 8'h00;
         GTCCR <= 8'h00;
         TCCRA <= 8'h00;
         TCCRB <= 8'h00;
@@ -878,7 +880,7 @@ begin
                     if(TCNTL_ADDR < 'h40)
                     begin
                         TCNTL <= bus_io_in;
-                        TCNTH <= TMP_REG;
+                        TCNTH <= TMP_REG_wr;
                     end
                 end
                 ICRL_ADDR:
@@ -886,21 +888,21 @@ begin
                     if(ICRL_ADDR < 'h40)
                     begin
                         ICRL <= bus_io_in;
-                        ICRH <= TMP_REG;
+                        ICRH <= TMP_REG_wr;
                     end
                 end
                 OCRAL_ADDR:
                 begin
                     if(OCRAL_ADDR < 'h40)
                         OCRAL <= bus_io_in;
-                        OCRAH <= TMP_REG;
+                        OCRAH <= TMP_REG_wr;
                 end
                 OCRBL_ADDR:
                 begin
                     if(OCRBL_ADDR < 'h40 && USE_OCRB == "TRUE")
                     begin
                         OCRBL <= bus_io_in;
-                        OCRBH <= TMP_REG;
+                        OCRBH <= TMP_REG_wr;
                     end
                 end
                 OCRCL_ADDR:
@@ -908,7 +910,7 @@ begin
                     if(OCRCL_ADDR < 'h40 && USE_OCRC == "TRUE")
                     begin
                         OCRCL <= bus_io_in;
-                        OCRCH <= TMP_REG;
+                        OCRCH <= TMP_REG_wr;
                     end
                 end
                 OCRDL_ADDR:
@@ -916,7 +918,7 @@ begin
                     if(OCRDL_ADDR < 'h40 && USE_OCRD == "TRUE")
                     begin
                         OCRDL <= bus_io_in;
-                        OCRDH <= TMP_REG;
+                        OCRDH <= TMP_REG_wr;
                     end
                 end
                 TIFR_ADDR:
@@ -931,8 +933,7 @@ begin
                 end
                 TCNTH_ADDR, ICRH_ADDR, OCRAH_ADDR, OCRBH_ADDR, OCRCH_ADDR, OCRDH_ADDR:
                 begin
-                    if(TCNTH_ADDR < 'h40)
-                        TMP_REG <= bus_io_in;
+                    TMP_REG_wr <= bus_io_in;
                 end
             endcase
         end
@@ -969,7 +970,7 @@ begin
                     if(TCNTL_ADDR >= 'h40)
                     begin
                         TCNTL <= bus_dat_in;
-                        TCNTH <= TMP_REG;
+                        TCNTH <= TMP_REG_wr;
                     end
                 end
                 ICRL_ADDR:
@@ -977,21 +978,21 @@ begin
                     if(ICRL_ADDR >= 'h40)
                     begin
                         ICRL <= bus_dat_in;
-                        ICRH <= TMP_REG;
+                        ICRH <= TMP_REG_wr;
                     end
                 end
                 OCRAL_ADDR:
                 begin
                     if(OCRAL_ADDR >= 'h40)
                         OCRAL <= bus_dat_in;
-                        OCRAH <= TMP_REG;
+                        OCRAH <= TMP_REG_wr;
                 end
                 OCRBL_ADDR:
                 begin
                     if(OCRBL_ADDR >= 'h40 && USE_OCRB == "TRUE")
                     begin
                         OCRBL <= bus_dat_in;
-                        OCRBH <= TMP_REG;
+                        OCRBH <= TMP_REG_wr;
                     end
                 end
                 OCRCL_ADDR:
@@ -999,7 +1000,7 @@ begin
                     if(OCRCL_ADDR >= 'h40 && USE_OCRC == "TRUE")
                     begin
                         OCRCL <= bus_dat_in;
-                        OCRCH <= TMP_REG;
+                        OCRCH <= TMP_REG_wr;
                     end
                 end
                 OCRDL_ADDR:
@@ -1007,7 +1008,7 @@ begin
                     if(OCRDL_ADDR >= 'h40 && USE_OCRD == "TRUE")
                     begin
                         OCRDL <= bus_dat_in;
-                        OCRDH <= TMP_REG;
+                        OCRDH <= TMP_REG_wr;
                     end
                 end
                 TIFR_ADDR:
@@ -1022,8 +1023,7 @@ begin
                 end
                 TCNTH_ADDR, ICRH_ADDR, OCRAH_ADDR, OCRBH_ADDR, OCRCH_ADDR, OCRDH_ADDR:
                 begin
-                    if(TCNTH_ADDR >= 'h40)
-                        TMP_REG <= bus_dat_in;
+                    TMP_REG_wr <= bus_dat_in;
                 end
             endcase
         end
@@ -1033,12 +1033,12 @@ begin
                 TCNTL_ADDR:
                 begin
                     if(TCNTL_ADDR < 'h40)
-                        TMP_REG <= TCNTL;
+                        TMP_REG_rd <= TCNTL;
                 end
                 ICRL_ADDR:
                 begin
                     if(ICRL_ADDR < 'h40)
-                        TMP_REG <= ICRL;
+                        TMP_REG_rd <= ICRL;
                 end
             endcase
         end
@@ -1048,12 +1048,12 @@ begin
                 TCNTL_ADDR:
                 begin
                     if(TCNTL_ADDR >= 'h40)
-                        TMP_REG <= TCNTL;
+                        TMP_REG_rd <= TCNTL;
                 end
                 ICRL_ADDR:
                 begin
                     if(ICRL_ADDR >= 'h40)
-                        TMP_REG <= ICRL;
+                        TMP_REG_rd <= ICRL;
                 end
             endcase
         end

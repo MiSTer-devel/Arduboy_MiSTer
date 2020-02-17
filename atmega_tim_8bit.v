@@ -264,7 +264,7 @@ begin
 end
 
 /* Set "oc" pin on specified conditions*/
-always @ (posedge rst or posedge clk)
+always @ (posedge clk)
 begin
     if(rst)
     begin
