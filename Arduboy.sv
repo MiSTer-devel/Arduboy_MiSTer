@@ -85,8 +85,8 @@ module emu
 	output  [6:0] USER_OUT
 );
 
-assign HDMI_ARX    = 2;
-assign HDMI_ARY    = 1;
+assign HDMI_ARX    = status[1] ? 8'd1 : 8'd2;
+assign HDMI_ARY    = status[1] ? 8'd2 : 8'd1;
 assign VGA_F1      = 0;
 
 assign LED_POWER   = 0;
@@ -116,7 +116,12 @@ wire reset = status[0] | buttons[1] | RESET | ioctl_download;
 localparam CONF_STR =
 {
     "Arduboy;;",
+	 "-;",
     "F0,BIN;",
+	 "-;",
+    "O1,Orientation,Horizontal,Vertical;",
+	 "-;",
+	 "-;",
     "R0,Reset;",
     "J1,A,B;",
     "V,v",`BUILD_DATE
@@ -162,7 +167,7 @@ atmega32u4 atmega32u4
     .rst_in(reset),
     .pgm_addr(pgm_addr),
     .pgm_data(pgm_data),
-    .buttons(~(joystick[5:0])),
+    .buttons(~(status[1] ? {joystick[5:4], joystick[1], joystick[0], joystick[2], joystick[3]} : joystick[5:0])),
     .RGB({LED_USER, LED_DISK[0]}),
     .Buzzer1(Buzzer1),
     .Buzzer2(Buzzer2),
@@ -190,7 +195,7 @@ vgaHdmi vgaHdmi
     .ce_pix(ce_pix)
 );
 
-arcade_video #(256,512,6) arcade_video
+arcade_video #(256,320,6) arcade_video
 (
 	.*,
 	.clk_video(clk_sys),
@@ -198,8 +203,8 @@ arcade_video #(256,512,6) arcade_video
 
 	.forced_scandoubler(0),
 	.gamma_bus(),
-	.no_rotate(1),
-	.rotate_ccw(0),
+	.no_rotate(~status[1]),
+	.rotate_ccw(1),
 	.fx(0)
 );
 
