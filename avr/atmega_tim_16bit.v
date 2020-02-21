@@ -25,7 +25,6 @@
 `define OCF0A 1
 `define OCF0B 2
 `define OCF0C 3
-`define OCF0D 4
 
 //`define GTCCR ('h00)
 `define PSRSYNC 0
@@ -53,8 +52,8 @@
 `define CS02    2
 `define WGM02   3
 `define WGM03   4
-`define FOC0B   6
-`define FOC0A   7
+//`define FOC0B   6
+//`define FOC0A   7
 
 //`define TCNT0 ('h00)
 //`define OCR0A ('h00)
@@ -72,22 +71,18 @@
 `define OCIE0A  1
 `define OCIE0B  2
 `define OCIE0C  3
-`define OCIE0D  4
-
 
 
 module atmega_tim_16bit # (
     parameter PLATFORM = "XILINX",
     parameter USE_OCRB = "TRUE",
     parameter USE_OCRC = "TRUE",
-    parameter USE_OCRD = "FALSE",
     parameter BUS_ADDR_IO_LEN = 6,
     parameter BUS_ADDR_DATA_LEN = 8,
     parameter GTCCR_ADDR = 'h23,
     parameter TCCRA_ADDR = 'h80,
     parameter TCCRB_ADDR = 'h81,
     parameter TCCRC_ADDR = 'h82,
-    parameter TCCRD_ADDR = 'h0,
     parameter TCNTL_ADDR = 'h84,
     parameter TCNTH_ADDR = 'h85,
     parameter ICRL_ADDR = 'h86,
@@ -98,8 +93,6 @@ module atmega_tim_16bit # (
     parameter OCRBH_ADDR = 'h8B,
     parameter OCRCL_ADDR = 'h8C,
     parameter OCRCH_ADDR = 'h8D,
-    parameter OCRDL_ADDR = 'h0,
-    parameter OCRDH_ADDR = 'h0,
     parameter TIMSK_ADDR = 'h6F,
     parameter TIFR_ADDR = 'h16
 )(
@@ -127,25 +120,20 @@ module atmega_tim_16bit # (
     input ocrb_int_rst,
     output ocrc_int,
     input ocrc_int_rst,
-    output ocrd_int,
-    input ocrd_int_rst,
 
     input t,
     output reg oca,
     output reg ocb,
     output reg occ,
-    output reg ocd,
     output oca_io_connect,
     output ocb_io_connect,
-    output occ_io_connect,
-    output ocd_io_connect
+    output occ_io_connect
     );
 
 reg [7:0]GTCCR;
 reg [7:0]TCCRA;
 reg [7:0]TCCRB;
 reg [7:0]TCCRC;
-reg [7:0]TCCRD;
 reg [7:0]TCNTL;
 reg [7:0]TCNTH;
 reg [7:0]OCRAL;
@@ -154,14 +142,11 @@ reg [7:0]OCRBL;
 reg [7:0]OCRBH;
 reg [7:0]OCRCL;
 reg [7:0]OCRCH;
-reg [7:0]OCRDL;
-reg [7:0]OCRDH;
 reg [7:0]ICRL;
 reg [7:0]ICRH;
 reg [15:0]OCRA_int;
 reg [15:0]OCRB_int;
 reg [15:0]OCRC_int;
-reg [15:0]OCRD_int;
 reg [7:0]TIMSK;
 reg [7:0]TIFR;
 
@@ -176,8 +161,6 @@ reg ocrb_p;
 reg ocrb_n;
 reg ocrc_p;
 reg ocrc_n;
-reg ocrd_p;
-reg ocrd_n;
 
 //reg l1;
 //reg l2;
@@ -314,11 +297,6 @@ begin
                     if(TCCRC_ADDR < 'h40)
                         bus_io_out = TCCRC;
                 end
-                TCCRD_ADDR:
-                begin
-                    if(TCCRD_ADDR < 'h40)
-                        bus_io_out = TCCRD;
-                end
                 TCNTL_ADDR:
                 begin
                     if(TCNTL_ADDR < 'h40)
@@ -369,16 +347,6 @@ begin
                     if(OCRCH_ADDR < 'h40 && USE_OCRC == "TRUE")
                         bus_io_out = OCRCH;
                 end
-                OCRDL_ADDR:
-                begin
-                    if(OCRDL_ADDR < 'h40 && USE_OCRD == "TRUE")
-                        bus_io_out = OCRDL;
-                end
-                OCRDH_ADDR:
-                begin
-                    if(OCRDH_ADDR < 'h40 && USE_OCRD == "TRUE")
-                        bus_io_out = OCRDH;
-                end
                 TIFR_ADDR:
                 begin
                     if(TIFR_ADDR < 'h40)
@@ -414,11 +382,6 @@ begin
                 begin
                     if(TCCRC_ADDR >= 'h40)
                         bus_dat_out = TCCRC;
-                end
-                TCCRD_ADDR:
-                begin
-                    if(TCCRD_ADDR >= 'h40)
-                        bus_dat_out = TCCRD;
                 end
                 TCNTL_ADDR:
                 begin
@@ -470,16 +433,6 @@ begin
                     if(OCRCH_ADDR >= 'h40 && USE_OCRC == "TRUE")
                         bus_dat_out = OCRCH;
                 end
-                OCRDL_ADDR:
-                begin
-                    if(OCRDL_ADDR >= 'h40 && USE_OCRD == "TRUE")
-                        bus_dat_out = OCRDL;
-                end
-                OCRDH_ADDR:
-                begin
-                    if(OCRDH_ADDR >= 'h40 && USE_OCRD == "TRUE")
-                        bus_dat_out = OCRDH;
-                end
                 TIFR_ADDR:
                 begin
                     if(TIFR_ADDR >= 'h40)
@@ -507,7 +460,6 @@ begin
         TCCRA <= 8'h00;
         TCCRB <= 8'h00;
         TCCRC <= 8'h00;
-        TCCRD <= 8'h00;
         TCNTL <= 8'h00;
         TCNTH <= 8'h00;
         OCRAL <= 8'h00;
@@ -516,14 +468,11 @@ begin
         OCRBH <= 8'h00;
         OCRCL <= 8'h00;
         OCRCH <= 8'h00;
-        OCRDL <= 8'h00;
-        OCRDH <= 8'h00;
         ICRL <= 8'h00;
         ICRH <= 8'h00;
         OCRA_int <= 16'h0000;
         OCRB_int <= 16'h0000;
         OCRC_int <= 16'h0000;
-        OCRD_int <= 16'h0000;
         TIMSK <= 8'h00;
         TIFR <= 8'h00;
         tov_p <= 1'b0;
@@ -534,12 +483,9 @@ begin
         ocrb_n <= 1'b0;
         ocrc_p <= 1'b0;
         ocrc_n <= 1'b0;
-        ocrd_p <= 1'b0;
-        ocrd_n <= 1'b0;
         oca <= 1'b0;
         ocb <= 1'b0;
         occ <= 1'b0;
-        ocd <= 1'b0;
         up_count <= 1'b1;
         clk_int_del <= 1'b0;
     end
@@ -565,11 +511,6 @@ begin
             TIFR[`OCF0C] <= 1'b1;
             ocrc_n <= ocrc_p;
         end
-        if(ocrd_p ^ ocrd_n)
-        begin
-            TIFR[`OCF0D] <= 1'b1;
-            ocrd_n <= ocrd_p;
-        end
         if(tov_int_rst)
         begin
             TIFR[`TOV0] <= 1'b0;
@@ -585,10 +526,6 @@ begin
         if(ocrc_int_rst)
         begin
             TIFR[`OCF0C] <= 1'b0;
-        end
-        if(ocrd_int_rst)
-        begin
-            TIFR[`OCF0D] <= 1'b0;
         end
         // Sample one IO core clock once every prescaller positive edge clock.
         clk_int_del <= clk_int; // Shift prescaller clock to a delay register every IO core positive edge clock to detect prescaller positive edges.
@@ -706,7 +643,7 @@ begin
             end // USE_OCRB != "TRUE"
             if(USE_OCRC == "TRUE")
             begin
-                // OCRB
+                // OCRC
                 if(updt_ocr_on_top ? ({TCNTH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCNTH, TCNTL} == 10'h0000) : ({TCNTH, TCNTL} == OCRC_int)))
                 begin
                     OCRC_int <= {OCRCH, OCRCL};
@@ -756,58 +693,6 @@ begin
                     end
                 end
             end // USE_OCRC != "TRUE"
-            if(USE_OCRD == "TRUE")
-            begin
-                // OCRB
-                if(updt_ocr_on_top ? ({TCNTH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCNTH, TCNTL} == 10'h0000) : ({TCNTH, TCNTL} == OCRD_int)))
-                begin
-                    OCRD_int <= {OCRDH, OCRDL};
-                end
-                if({TCNTH, TCNTL} == OCRD_int)
-                begin
-                    case({TCCRB[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]})
-                        4'd4, 4'd12: ocd <= ~ocd;
-                        default:
-                        begin
-                            case(OCRB_int)
-                                16'h0000:   ocd <= 1'b0;
-                                16'hFFFF:   ocd <= 1'b1;
-                                default:
-                                begin
-                                    if(up_count)
-                                    begin
-                                        case(TCCRA[`COM0D1:`COM0D0])
-                                            2'h1: ocd <= ~ocd;
-                                            2'h2: ocd <= 1'b0;
-                                            2'h3: ocd <= 1'b1;
-                                        endcase
-                                    end
-                                    else
-                                    begin
-                                        case(TCCRA[`COM0D1:`COM0D0])
-                                            2'h1: ocd <= ~ocd;
-                                            2'h2: ocd <= 1'b1;
-                                            2'h3: ocd <= 1'b0;
-                                        endcase
-                                    end
-                                end
-                            endcase
-                        end
-                    endcase
-                    if(TIMSK[`OCIE0D] == 1'b1)
-                    begin
-                        if(ocrd_p == ocrd_n && clk_active == 1'b1)
-                        begin
-                            ocrd_p <= ~ocrd_p;
-                        end
-                    end
-                    else
-                    begin
-                        ocrd_p <= 1'b0;
-                        ocrd_n <= 1'b0;
-                    end
-                end
-            end // USE_OCRD != "TRUE"
             // TCNT overflow logick.
             if({TCNTH, TCNTL} == t_ovf_value)
             begin
@@ -870,11 +755,6 @@ begin
                     if(TCCRC_ADDR < 'h40)
                         TCCRC <= bus_io_in;
                 end
-                TCCRD_ADDR:
-                begin
-                    if(TCCRD_ADDR < 'h40)
-                        TCCRD <= bus_io_in;
-                end
                 TCNTL_ADDR:
                 begin
                     if(TCNTL_ADDR < 'h40)
@@ -894,8 +774,10 @@ begin
                 OCRAL_ADDR:
                 begin
                     if(OCRAL_ADDR < 'h40)
+                    begin
                         OCRAL <= bus_io_in;
                         OCRAH <= TMP_REG_wr;
+                    end
                 end
                 OCRBL_ADDR:
                 begin
@@ -913,14 +795,6 @@ begin
                         OCRCH <= TMP_REG_wr;
                     end
                 end
-                OCRDL_ADDR:
-                begin
-                    if(OCRDL_ADDR < 'h40 && USE_OCRD == "TRUE")
-                    begin
-                        OCRDL <= bus_io_in;
-                        OCRDH <= TMP_REG_wr;
-                    end
-                end
                 TIFR_ADDR:
                 begin
                     if(TIFR_ADDR < 'h40)
@@ -931,7 +805,7 @@ begin
                     if(TIMSK_ADDR < 'h40)
                         TIMSK <= bus_io_in;
                 end
-                TCNTH_ADDR, ICRH_ADDR, OCRAH_ADDR, OCRBH_ADDR, OCRCH_ADDR, OCRDH_ADDR:
+                TCNTH_ADDR, ICRH_ADDR, OCRAH_ADDR, OCRBH_ADDR, OCRCH_ADDR:
                 begin
                     TMP_REG_wr <= bus_io_in;
                 end
@@ -960,11 +834,6 @@ begin
                     if(TCCRC_ADDR >= 'h40)
                         TCCRC <= bus_dat_in;
                 end
-                TCCRD_ADDR:
-                begin
-                    if(TCCRD_ADDR >= 'h40)
-                        TCCRD <= bus_dat_in;
-                end
                 TCNTL_ADDR:
                 begin
                     if(TCNTL_ADDR >= 'h40)
@@ -984,8 +853,10 @@ begin
                 OCRAL_ADDR:
                 begin
                     if(OCRAL_ADDR >= 'h40)
+                    begin
                         OCRAL <= bus_dat_in;
                         OCRAH <= TMP_REG_wr;
+                    end
                 end
                 OCRBL_ADDR:
                 begin
@@ -1003,14 +874,6 @@ begin
                         OCRCH <= TMP_REG_wr;
                     end
                 end
-                OCRDL_ADDR:
-                begin
-                    if(OCRDL_ADDR >= 'h40 && USE_OCRD == "TRUE")
-                    begin
-                        OCRDL <= bus_dat_in;
-                        OCRDH <= TMP_REG_wr;
-                    end
-                end
                 TIFR_ADDR:
                 begin
                     if(TIFR_ADDR >= 'h40)
@@ -1021,7 +884,7 @@ begin
                     if(TIMSK_ADDR >= 'h40)
                         TIMSK <= bus_dat_in;
                 end
-                TCNTH_ADDR, ICRH_ADDR, OCRAH_ADDR, OCRBH_ADDR, OCRCH_ADDR, OCRDH_ADDR:
+                TCNTH_ADDR, ICRH_ADDR, OCRAH_ADDR, OCRBH_ADDR, OCRCH_ADDR:
                 begin
                     TMP_REG_wr <= bus_dat_in;
                 end
@@ -1033,12 +896,12 @@ begin
                 TCNTL_ADDR:
                 begin
                     if(TCNTL_ADDR < 'h40)
-                        TMP_REG_rd <= TCNTL;
+                        TMP_REG_rd <= TCNTH;
                 end
                 ICRL_ADDR:
                 begin
                     if(ICRL_ADDR < 'h40)
-                        TMP_REG_rd <= ICRL;
+                        TMP_REG_rd <= ICRH;
                 end
             endcase
         end
@@ -1048,12 +911,12 @@ begin
                 TCNTL_ADDR:
                 begin
                     if(TCNTL_ADDR >= 'h40)
-                        TMP_REG_rd <= TCNTL;
+                        TMP_REG_rd <= TCNTH;
                 end
                 ICRL_ADDR:
                 begin
                     if(ICRL_ADDR >= 'h40)
-                        TMP_REG_rd <= ICRL;
+                        TMP_REG_rd <= ICRH;
                 end
             endcase
         end
@@ -1064,11 +927,9 @@ assign tov_int = TIFR[`TOV0];
 assign ocra_int = TIFR[`OCF0A];
 assign ocrb_int = TIFR[`OCF0B];
 assign ocrc_int = TIFR[`OCF0C];
-assign ocrd_int = TIFR[`OCF0D];
 
 assign oca_io_connect = (TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : (TCCRA[`COM0A1:`COM0A0] == 2'b01 ? (({TCCRA[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]} == 4'd14 || {TCCRA[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]} == 4'd15) ? 1'b1 : 1'b0) : 1'b1);
 assign ocb_io_connect = (TCCRA[`COM0B1:`COM0B0] == 2'b00 || TCCRA[`COM0B1:`COM0B0] == 2'b01) ? 1'b0 : 1'b1;
 assign occ_io_connect = (TCCRA[`COM0C1:`COM0C0] == 2'b00 || TCCRA[`COM0C1:`COM0C0] == 2'b01) ? 1'b0 : 1'b1;
-assign ocd_io_connect = (TCCRA[`COM0D1:`COM0D0] == 2'b00 || TCCRA[`COM0D1:`COM0D0] == 2'b01) ? 1'b0 : 1'b1;
 
 endmodule

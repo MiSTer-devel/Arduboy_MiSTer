@@ -102,20 +102,23 @@ begin
                 EECR_ADDR:
                 begin
                     EECR <= bus_in;
-                    if(bus_in[2:1] == 2'b10)
+                    if(EECR[2] | bus_in[1])
                     begin
                         eempe_timeout_cnt <= 3'h4;
                     end
                 end
             endcase
         end
-        if((&EECR[2:1]) & |eempe_timeout_cnt)
+        if((&EECR[2:1]))
         begin
-            case(EECR[5:4])
-            2'b00: eep[{EEARH, EEARL}] <= EEDR_WRITE;
-            2'b01: eep[{EEARH, EEARL}] <= 8'hFF;
-            2'b10: eep[{EEARH, EEARL}] <= EEDR_WRITE;
-            endcase
+            if(|eempe_timeout_cnt)
+            begin
+                case(EECR[5:4])
+                2'b00: eep[{EEARH, EEARL}] <= EEDR_WRITE;
+                2'b01: eep[{EEARH, EEARL}] <= 8'hFF;
+                2'b10: eep[{EEARH, EEARL}] <= EEDR_WRITE;
+                endcase
+            end
             EECR[2:1] <= 2'b00;
             content_modifyed <= content_modifyed | 1'b1;
             if(int_p == int_n)

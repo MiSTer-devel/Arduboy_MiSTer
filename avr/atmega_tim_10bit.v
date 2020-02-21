@@ -921,7 +921,7 @@ begin
                     TCNTL_ADDR:
                     begin
                         if(TCNTL_ADDR < 'h40)
-                            TMP_REG <= TCNTL;
+                            TMP_REG <= TCH;
                     end
                 endcase
             end
@@ -931,7 +931,7 @@ begin
                     TCNTL_ADDR:
                     begin
                         if(TCNTL_ADDR >= 'h40)
-                            TMP_REG <= TCNTL;
+                            TMP_REG <= TCH;
                     end
                 endcase
             end

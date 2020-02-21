@@ -116,8 +116,8 @@ assign RGB[2] = tim1_ocb_io_connact ? tim1_ocb : ~(pb_out[6]);
 assign RGB[1] = tim0_oca_io_connact ? ~tim0_oca : ~(pb_out[7]);
 assign RGB[0] = tim1_oca_io_connact ? tim1_oca : ~(pb_out[5]);
 
-assign Buzzer1 = pc_out[6]; // tim3_oca_io_connact ? tim3_oca :
-assign Buzzer2 = tim4_ocap_io_connact ? tim4_oca : 1'b0; // : pc_out[7];
+assign Buzzer1 = pc_out[6];
+assign Buzzer2 = tim4_ocap_io_connact ? tim4_oca : 1'b0;
 assign DC = pd_out[4];
 
 wire core_clk = clk;
@@ -151,8 +151,6 @@ wire tim1_oca_io_connact;
 wire tim1_ocb_io_connact;
 wire tim1_occ_io_connact;
 wire tim3_oca_io_connact;
-wire tim3_ocb_io_connact;
-wire tim3_occ_io_connact;
 wire tim4_ocap_io_connact;
 wire tim4_ocan_io_connact;
 wire tim4_ocbp_io_connact;
@@ -171,8 +169,6 @@ wire tim1_oca;
 wire tim1_ocb;
 wire tim1_occ;
 wire tim3_oca;
-wire tim3_ocb;
-wire tim3_occ;
 wire tim4_oca;
 wire tim4_ocb;
 wire tim4_occ;
@@ -215,8 +211,8 @@ wire int_adc = 0;
 wire int_ee_ready;
 wire int_timer3_capt = 0;
 wire int_timer3_compa;
-wire int_timer3_compb;
-wire int_timer3_compc;
+wire int_timer3_compb = 0;
+wire int_timer3_compc = 0;
 wire int_timer3_ovf;
 wire int_twi = 0;
 wire int_spm_ready = 0;
@@ -258,8 +254,8 @@ wire int_adc_rst = 0;
 wire int_ee_ready_rst;
 wire int_timer3_capt_rst = 0;
 wire int_timer3_compa_rst;
-wire int_timer3_compb_rst;
-wire int_timer3_compc_rst;
+wire int_timer3_compb_rst = 0;
+wire int_timer3_compc_rst = 0;
 wire int_timer3_ovf_rst;
 wire int_twi_rst = 0;
 wire int_spm_ready_rst = 0;
@@ -481,14 +477,12 @@ atmega_tim_16bit # (
     .PLATFORM("XILINX"),
     .USE_OCRB("TRUE"),
     .USE_OCRC("TRUE"),
-    .USE_OCRD("FALSE"),
     .BUS_ADDR_IO_LEN(6),
     .BUS_ADDR_DATA_LEN(8),
     .GTCCR_ADDR('h23),
     .TCCRA_ADDR('h80),
     .TCCRB_ADDR('h81),
     .TCCRC_ADDR('h82),
-    .TCCRD_ADDR('h0),
     .TCNTL_ADDR('h84),
     .TCNTH_ADDR('h85),
     .ICRL_ADDR('h86),
@@ -499,8 +493,6 @@ atmega_tim_16bit # (
     .OCRBH_ADDR('h8B),
     .OCRCL_ADDR('h8C),
     .OCRCH_ADDR('h8D),
-    .OCRDL_ADDR('h0),
-    .OCRDH_ADDR('h0),
     .TIMSK_ADDR('h6F),
     .TIFR_ADDR('h16)
 )tim_1(
@@ -528,46 +520,34 @@ atmega_tim_16bit # (
     .ocrb_int_rst(int_timer1_compb_rst),
     .ocrc_int(int_timer1_compc),
     .ocrc_int_rst(int_timer1_compc_rst),
-    .ocrd_int(),
-    .ocrd_int_rst(),
 
     .t(),
     .oca(tim1_oca),
     .ocb(tim1_ocb),
     .occ(tim1_occ),
-    .ocd(),
     .oca_io_connect(tim1_oca_io_connact),
     .ocb_io_connect(tim1_ocb_io_connact),
-    .occ_io_connect(tim1_occ_io_connact),
-    .ocd_io_connect()
+    .occ_io_connect(tim1_occ_io_connact)
     );
 
 wire [7:0]io_tim3_d_out;
 wire [7:0]dat_tim3_d_out;
 atmega_tim_16bit # (
     .PLATFORM("XILINX"),
-    .USE_OCRB("TRUE"),
-    .USE_OCRC("TRUE"),
-    .USE_OCRD("FALSE"),
+    .USE_OCRB("FALSE"),
+    .USE_OCRC("FALSE"),
     .BUS_ADDR_IO_LEN(6),
     .BUS_ADDR_DATA_LEN(8),
     .GTCCR_ADDR('h23),
     .TCCRA_ADDR('h90),
     .TCCRB_ADDR('h91),
     .TCCRC_ADDR('h92),
-    .TCCRD_ADDR('h0),
     .TCNTL_ADDR('h94),
     .TCNTH_ADDR('h95),
     .ICRL_ADDR('h96),
     .ICRH_ADDR('h97),
     .OCRAL_ADDR('h98),
     .OCRAH_ADDR('h99),
-    .OCRBL_ADDR('h9A),
-    .OCRBH_ADDR('h9B),
-    .OCRCL_ADDR('h9C),
-    .OCRCH_ADDR('h9D),
-    .OCRDL_ADDR('h0),
-    .OCRDH_ADDR('h0),
     .TIMSK_ADDR('h71),
     .TIFR_ADDR('h18)
 )tim_3(
@@ -591,22 +571,10 @@ atmega_tim_16bit # (
     .tov_int_rst(int_timer3_ovf_rst),
     .ocra_int(int_timer3_compa),
     .ocra_int_rst(int_timer3_compa_rst),
-    .ocrb_int(int_timer3_compb),
-    .ocrb_int_rst(int_timer3_compb_rst),
-    .ocrc_int(int_timer3_compc),
-    .ocrc_int_rst(int_timer3_compc_rst),
-    .ocrd_int(),
-    .ocrd_int_rst(),
 
     .t(),
     .oca(tim3_oca),
-    .ocb(tim3_ocb),
-    .occ(tim3_occ),
-    .ocd(),
-    .oca_io_connect(tim3_oca_io_connact),
-    .ocb_io_connect(tim3_ocb_io_connact),
-    .occ_io_connect(tim3_occ_io_connact),
-    .ocd_io_connect()
+    .oca_io_connect(tim3_oca_io_connact)
     );
 
 wire [7:0]io_pll_d_out;

@@ -20,69 +20,69 @@
 
 module emu
 (
-	//Master input clock
-	input         CLK_50M,
+    //Master input clock
+    input         CLK_50M,
 
-	//Async reset from top-level module.
-	//Can be used as initial reset.
-	input         RESET,
+    //Async reset from top-level module.
+    //Can be used as initial reset.
+    input         RESET,
 
-	//Must be passed to hps_io module
-	inout  [45:0] HPS_BUS,
+    //Must be passed to hps_io module
+    inout  [45:0] HPS_BUS,
 
-	//Base video clock. Usually equals to CLK_SYS.
-	output        VGA_CLK,
+    //Base video clock. Usually equals to CLK_SYS.
+    output        VGA_CLK,
 
-	//Multiple resolutions are supported using different VGA_CE rates.
-	//Must be based on CLK_VIDEO
-	output        VGA_CE,
+    //Multiple resolutions are supported using different VGA_CE rates.
+    //Must be based on CLK_VIDEO
+    output        VGA_CE,
 
-	output  [7:0] VGA_R,
-	output  [7:0] VGA_G,
-	output  [7:0] VGA_B,
-	output        VGA_HS,
-	output        VGA_VS,
-	output        VGA_DE,    // = ~(VBlank | HBlank)
-	output        VGA_F1,
+    output  [7:0] VGA_R,
+    output  [7:0] VGA_G,
+    output  [7:0] VGA_B,
+    output        VGA_HS,
+    output        VGA_VS,
+    output        VGA_DE,    // = ~(VBlank | HBlank)
+    output        VGA_F1,
 
-	//Base video clock. Usually equals to CLK_SYS.
-	output        HDMI_CLK,
+    //Base video clock. Usually equals to CLK_SYS.
+    output        HDMI_CLK,
 
-	//Multiple resolutions are supported using different HDMI_CE rates.
-	//Must be based on CLK_VIDEO
-	output        HDMI_CE,
+    //Multiple resolutions are supported using different HDMI_CE rates.
+    //Must be based on CLK_VIDEO
+    output        HDMI_CE,
 
-	output  [7:0] HDMI_R,
-	output  [7:0] HDMI_G,
-	output  [7:0] HDMI_B,
-	output        HDMI_HS,
-	output        HDMI_VS,
-	output        HDMI_DE,   // = ~(VBlank | HBlank)
-	output  [1:0] HDMI_SL,   // scanlines fx
+    output  [7:0] HDMI_R,
+    output  [7:0] HDMI_G,
+    output  [7:0] HDMI_B,
+    output        HDMI_HS,
+    output        HDMI_VS,
+    output        HDMI_DE,   // = ~(VBlank | HBlank)
+    output  [1:0] HDMI_SL,   // scanlines fx
 
-	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
-	output  [7:0] HDMI_ARX,
-	output  [7:0] HDMI_ARY,
+    //Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
+    output  [7:0] HDMI_ARX,
+    output  [7:0] HDMI_ARY,
 
-	output        LED_USER,  // 1 - ON, 0 - OFF.
+    output        LED_USER,  // 1 - ON, 0 - OFF.
 
-	// b[1]: 0 - LED status is system status OR'd with b[0]
-	//       1 - LED status is controled solely by b[0]
-	// hint: supply 2'b00 to let the system control the LED.
-	output  [1:0] LED_POWER,
-	output  [1:0] LED_DISK,
+    // b[1]: 0 - LED status is system status OR'd with b[0]
+    //       1 - LED status is controled solely by b[0]
+    // hint: supply 2'b00 to let the system control the LED.
+    output  [1:0] LED_POWER,
+    output  [1:0] LED_DISK,
 
-	output [15:0] AUDIO_L,
-	output [15:0] AUDIO_R,
-	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
+    output [15:0] AUDIO_L,
+    output [15:0] AUDIO_R,
+    output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
 
-	// Open-drain User port.
-	// 0 - D+/RX
-	// 1 - D-/TX
-	// 2..6 - USR2..USR6
-	// Set USER_OUT to 1 to read from USER_IN.
-	input   [6:0] USER_IN,
-	output  [6:0] USER_OUT
+    // Open-drain User port.
+    // 0 - D+/RX
+    // 1 - D-/TX
+    // 2..6 - USR2..USR6
+    // Set USER_OUT to 1 to read from USER_IN.
+    input   [6:0] USER_IN,
+    output  [6:0] USER_OUT
 );
 
 assign HDMI_ARX    = status[1] ? 8'd1 : 8'd2;
@@ -96,7 +96,6 @@ assign USER_OUT    = '1;
 assign AUDIO_S     = 0;
 assign AUDIO_L     = {1'b0,{15{Buzzer1}}} + {1'b0,{15{Buzzer2}}};
 assign AUDIO_R     = AUDIO_L;
-
 
 ///////////////////////////////////////////////////////
 
@@ -116,13 +115,10 @@ wire reset = status[0] | buttons[1] | RESET | ioctl_download;
 localparam CONF_STR =
 {
     "Arduboy;;",
-	 "-;",
     "F0,BIN;",
-	 "-;",
-    "O1,Orientation,Horizontal,Vertical;",
-	 "-;",
-	 "-;",
     "R0,Reset;",
+    "-;",
+    "O1,Orientation,Horizontal,Vertical;",
     "J1,A,B;",
     "V,v",`BUILD_DATE
 };
@@ -142,7 +138,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
     .conf_str(CONF_STR),
     .joystick_0(joystick),
     .status(status),
-	 .buttons(buttons),
+    .buttons(buttons),
 
     .ioctl_download(ioctl_download),
     .ioctl_wr(ioctl_wr),
@@ -176,9 +172,8 @@ atmega32u4 atmega32u4
     .spi_mosi(oled_data)
 );
 
-
 wire pixelValue, ce_pix;
-wire VSync,HSync,HBlank,VBlank;
+wire VSync, HSync, HBlank, VBlank;
 
 vgaHdmi vgaHdmi
 (
@@ -197,16 +192,15 @@ vgaHdmi vgaHdmi
 
 arcade_video #(256,320,6) arcade_video
 (
-	.*,
-	.clk_video(clk_sys),
-	.RGB_in({6{pixelValue}}),
+    .*,
+    .clk_video(clk_sys),
+    .RGB_in({6{pixelValue}}),
 
-	.forced_scandoubler(0),
-	.gamma_bus(),
-	.no_rotate(~status[1]),
-	.rotate_ccw(1),
-	.fx(0)
+    .forced_scandoubler(0),
+    .gamma_bus(),
+    .no_rotate(~status[1]),
+    .rotate_ccw(1),
+    .fx(0)
 );
-
 
 endmodule
