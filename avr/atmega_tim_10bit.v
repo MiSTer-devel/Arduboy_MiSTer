@@ -383,10 +383,9 @@ begin
                     if(OCRD_ADDR >= 'h40 && USE_OCRD == "TRUE")
                         bus_dat_out = OCRD;
                 end
-                TIFR_ADDR:
+                (TIFR_ADDR + 'h20):
                 begin
-                    if(TIFR_ADDR >= 'h40)
-                        bus_dat_out = TIFR;
+                    bus_dat_out = TIFR;
                 end
                 TIMSK_ADDR:
                 begin
@@ -903,10 +902,9 @@ begin
                             OCRD <= {TMP_REG, bus_dat_in};
                         end
                     end
-                    TIFR_ADDR:
+                    (TIFR_ADDR + 'h20):
                     begin
-                        if(TIFR_ADDR >= 'h40)
-                            TIFR <= TIFR & ~bus_dat_in;
+                        TIFR <= TIFR & ~bus_dat_in;
                     end
                     TIMSK_ADDR:
                     begin

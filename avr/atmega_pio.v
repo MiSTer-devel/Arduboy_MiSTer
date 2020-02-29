@@ -43,6 +43,12 @@ module atmega_pio # (
     input [7:0]bus_in,
     output reg [7:0]bus_out,
 
+    input [7:0]addr_dat,
+    input wr_dat,
+    input rd_dat,
+    input [7:0]bus_dat_in,
+    output reg [7:0]bus_dat_out,
+
     input [7:0]io_in,
     output [7:0]io_out
     );
@@ -66,12 +72,18 @@ begin
         DDR <= 8'h00;
         PORT <= 8'h00;
     end
-    else
-    if(wr)
+    else if(wr)
     begin
         case(addr)
         DDR_ADDR: DDR <= bus_in;
         PORT_ADDR: PORT <= bus_in;
+        endcase
+    end
+    else if(wr_dat)
+    begin
+        case(addr_dat)
+        (DDR_ADDR + 'h20): DDR <= bus_dat_in;
+        (PORT_ADDR + 'h20): PORT <= bus_dat_in;
         endcase
     end
 end
@@ -86,6 +98,20 @@ begin
         DDR_ADDR: bus_out = DDR;
         PIN_ADDR: bus_out = io_in;
         default: bus_out = 8'h00;
+        endcase
+    end
+end
+
+always @*
+begin
+    bus_dat_out = 8'h00;
+    if(rd_dat & ~rst)
+    begin
+        case(addr_dat)
+        (PORT_ADDR + 'h20): bus_dat_out = PORT;
+        (DDR_ADDR + 'h20): bus_dat_out = DDR;
+        (PIN_ADDR + 'h20): bus_dat_out = io_in;
+        default: bus_dat_out = 8'h00;
         endcase
     end
 end

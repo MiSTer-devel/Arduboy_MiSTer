@@ -24,13 +24,11 @@
 
 `define PLATFORM "XILINX"
 
-/* For ATMEGA32U4 "MEGA_ENHANCED_128K" family*/
+/* For ATMEGA32U4 "MEGA_ENHANCED_128K" family */
 `define CORE_TYPE               `MEGA_ENHANCED_128K
 `define ROM_ADDR_WIDTH          14
 `define BUS_ADDR_DATA_LEN       12
 `define RAM_ADDR_WIDTH          12
-`define RESERVED_RAM_FOR_IO     'h100
-
 
 `define VECTOR_INT_TABLE_SIZE   42
 `define WATCHDOG_CNT_WIDTH      0//27
@@ -265,8 +263,19 @@ wire int_timer4_compd_rst;
 wire int_timer4_ovf_rst;
 wire int_timer4_fpf_rst = 0;
 
+wire [7:0]random_d_out;
+unstable_counters unstable_counters
+(
+    .clk(clk),
+    .rst(rst),
+    .en((data_addr[7:0] == 8'h78) &&
+        (data_read & ~ram_sel)), // ADC Data Register Low byte
+    .dat(random_d_out)
+);
+
 // PORTB
 wire [7:0]io_pb_d_out;
+wire [7:0]dat_pb_d_out;
 atmega_pio # (
     .PLATFORM(`PLATFORM),
     .BUS_ADDR_DATA_LEN(6),
@@ -285,12 +294,19 @@ atmega_pio # (
     .bus_in(io_out),
     .bus_out(io_pb_d_out),
 
+    .addr_dat(data_addr[7:0]),
+    .wr_dat(data_write & ~ram_sel),
+    .rd_dat(data_read & ~ram_sel),
+    .bus_dat_in(core_data_out),
+    .bus_dat_out(dat_pb_d_out),
+
     .io_in(pb_in),
     .io_out(pb_out)
     );
 
 // PORTC
 wire [7:0]io_pc_d_out;
+wire [7:0]dat_pc_d_out;
 atmega_pio # (
     .PLATFORM(`PLATFORM),
     .BUS_ADDR_DATA_LEN(6),
@@ -309,12 +325,19 @@ atmega_pio # (
     .bus_in(io_out),
     .bus_out(io_pc_d_out),
 
+    .addr_dat(data_addr[7:0]),
+    .wr_dat(data_write & ~ram_sel),
+    .rd_dat(data_read & ~ram_sel),
+    .bus_dat_in(core_data_out),
+    .bus_dat_out(dat_pc_d_out),
+
     .io_in(pc_in),
     .io_out(pc_out)
     );
 
 // PORTD
 wire [7:0]io_pd_d_out;
+wire [7:0]dat_pd_d_out;
 atmega_pio # (
     .PLATFORM(`PLATFORM),
     .BUS_ADDR_DATA_LEN(6),
@@ -333,12 +356,19 @@ atmega_pio # (
     .bus_in(io_out),
     .bus_out(io_pd_d_out),
 
+    .addr_dat(data_addr[7:0]),
+    .wr_dat(data_write & ~ram_sel),
+    .rd_dat(data_read & ~ram_sel),
+    .bus_dat_in(core_data_out),
+    .bus_dat_out(dat_pd_d_out),
+
     .io_in(pd_in),
     .io_out(pd_out)
     );
 
 // PORTE
 wire [7:0]io_pe_d_out;
+wire [7:0]dat_pe_d_out;
 atmega_pio # (
     .PLATFORM(`PLATFORM),
     .BUS_ADDR_DATA_LEN(6),
@@ -357,12 +387,19 @@ atmega_pio # (
     .bus_in(io_out),
     .bus_out(io_pe_d_out),
 
+    .addr_dat(data_addr[7:0]),
+    .wr_dat(data_write & ~ram_sel),
+    .rd_dat(data_read & ~ram_sel),
+    .bus_dat_in(core_data_out),
+    .bus_dat_out(dat_pe_d_out),
+
     .io_in(pe_in),
     .io_out(pe_out)
     );
 
 // PORTF
 wire [7:0]io_pf_d_out;
+wire [7:0]dat_pf_d_out;
 atmega_pio # (
     .PLATFORM(`PLATFORM),
     .BUS_ADDR_DATA_LEN(6),
@@ -380,6 +417,12 @@ atmega_pio # (
     .rd(io_read),
     .bus_in(io_out),
     .bus_out(io_pf_d_out),
+
+    .addr_dat(data_addr[7:0]),
+    .wr_dat(data_write & ~ram_sel),
+    .rd_dat(data_read & ~ram_sel),
+    .bus_dat_in(core_data_out),
+    .bus_dat_out(dat_pf_d_out),
 
     .io_in(pf_in),
     .io_out(pf_out)
@@ -703,7 +746,7 @@ ram  #(
     .clk(core_clk),
     .re(data_read & ram_sel),
     .we(data_write & ram_sel),
-    .a(data_addr[`RAM_ADDR_WIDTH-1:0] - 'h100),
+    .a(data_addr[`RAM_ADDR_WIDTH-1:0]),
     .d_in(core_data_out),
     .d_out(ram_bus_out)
 );
@@ -730,7 +773,7 @@ io_bus_dmux #(
     );
 
 io_bus_dmux #(
-    .NR_OF_BUSSES_IN(5)
+    .NR_OF_BUSSES_IN(11)
     )
     ram_bus_dmux_inst(
     .bus_in({
@@ -738,7 +781,13 @@ io_bus_dmux #(
     dat_tim0_d_out,
     dat_tim1_d_out,
     dat_tim3_d_out,
-    dat_tim4_d_out
+    dat_tim4_d_out,
+    dat_pb_d_out,
+    dat_pc_d_out,
+    dat_pd_d_out,
+    dat_pe_d_out,
+    dat_pf_d_out,
+    random_d_out
     }),
     .bus_out(core_data_in)
     );
@@ -747,7 +796,7 @@ xmega # (
     .PLATFORM(`PLATFORM),
     .CORE_TYPE(`CORE_TYPE),
     .ROM_ADDR_WIDTH(`ROM_ADDR_WIDTH),
-    .RAM_ADDR_WIDTH(`BUS_ADDR_DATA_LEN),
+    .RAM_ADDR_WIDTH(`RAM_ADDR_WIDTH),
     .WATCHDOG_CNT_WIDTH(`WATCHDOG_CNT_WIDTH),/* If is 0 the watchdog is disabled */
     .VECTOR_INT_TABLE_SIZE(`VECTOR_INT_TABLE_SIZE)/* If is 0 the interrupt module is disabled */
     )atmega32u4_inst(

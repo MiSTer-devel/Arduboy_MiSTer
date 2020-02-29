@@ -166,7 +166,7 @@ end*/
 always @*
 begin
     case(TCCRB[`CS02:`CS00])
-    3'b001: clk_int = clk;
+    //3'b001: clk_int = clk;
     3'b010: clk_int = clk8;
     3'b011: clk_int = clk64;
     3'b100: clk_int = clk256;
@@ -253,6 +253,34 @@ begin
         if(rd_dat)
         begin
             case(addr_dat)
+                (GTCCR_ADDR + 'h20):
+                begin
+                    bus_dat_out = GTCCR;
+                end
+                (TCCRA_ADDR + 'h20):
+                begin
+                    bus_dat_out = TCCRA;
+                end
+                (TCCRB_ADDR + 'h20):
+                begin
+                    bus_dat_out = TCCRB;
+                end
+                (TCNT_ADDR + 'h20):
+                begin
+                    bus_dat_out = TCNT;
+                end
+                (OCRA_ADDR + 'h20):
+                begin
+                    bus_dat_out = OCRA;
+                end
+                (OCRB_ADDR + 'h20):
+                begin
+                    bus_dat_out = OCRB;
+                end
+                (TIFR_ADDR + 'h20):
+                begin
+                    bus_dat_out = TIFR;
+                end
                 TIMSK_ADDR:
                 begin
                     bus_dat_out = TIMSK;
@@ -507,6 +535,34 @@ begin
         if(wr_dat)
         begin
             case(addr_dat)
+                (GTCCR_ADDR + 'h20):
+                begin
+                    GTCCR <= bus_dat_in;
+                end
+                (TCCRA_ADDR + 'h20):
+                begin
+                    TCCRA <= bus_dat_in;
+                end
+                (TCCRB_ADDR + 'h20):
+                begin
+                    TCCRB <= bus_dat_in;
+                end
+                (TCNT_ADDR + 'h20):
+                begin
+                    TCNT <= bus_dat_in;
+                end
+                (OCRA_ADDR + 'h20):
+                begin
+                    OCRA <= bus_dat_in;
+                end
+                (OCRB_ADDR + 'h20):
+                begin
+                    OCRB <= bus_dat_in;
+                end
+                (TIFR_ADDR + 'h20):
+                begin
+                    TIFR <= TIFR & ~bus_dat_in;
+                end
                 TIMSK_ADDR:
                 begin
                     TIMSK <= bus_dat_in;
