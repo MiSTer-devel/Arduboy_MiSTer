@@ -115,7 +115,7 @@ wire reset = status[0] | buttons[1] | RESET | ioctl_download;
 localparam CONF_STR =
 {
     "Arduboy;;",
-    "F0,BIN;",
+    "F0,BINHEX;",
     "R0,Reset;",
     "-;",
     "O1,Orientation,Horizontal,Vertical;",
@@ -129,9 +129,10 @@ wire  [1:0] buttons;
 wire        ioctl_download;
 wire        ioctl_wr;
 wire [14:0] ioctl_addr;
-wire [15:0] ioctl_dout;
+wire  [7:0] ioctl_dout;
+wire  [7:0] ioctl_index;
 
-hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
+hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
     .clk_sys(clk_sys),
     .HPS_BUS(HPS_BUS),
@@ -141,18 +142,54 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
     .buttons(buttons),
 
     .ioctl_download(ioctl_download),
+    .ioctl_index(ioctl_index),
     .ioctl_wr(ioctl_wr),
     .ioctl_addr(ioctl_addr),
     .ioctl_dout(ioctl_dout)
 );
 
 (* ram_init_file = "Arduventure.mif" *)
-reg  [15:0] rom [16384];
+reg  [1:0][7:0] rom[16384];
 wire [13:0] pgm_addr;
 reg  [15:0] pgm_data;
 
 always @ (posedge clk_avr) pgm_data <= rom[pgm_addr];
-always @ (posedge clk_sys) if (ioctl_wr) rom[ioctl_addr[14:1]] <= ioctl_dout;
+
+wire [3:0] digit = (ioctl_dout[7:4] != 3) ? (ioctl_dout[3:0] + 4'd9) : ioctl_dout[3:0];
+always @ (posedge clk_sys) begin
+	reg  [3:0] state = 0;
+	reg  [7:0] cnt;
+	reg [15:0] addr;
+	reg  [3:0] code;
+
+	if (ioctl_wr) begin
+		if(!ioctl_index) rom[ioctl_addr[14:1]][ioctl_addr[0]] <= ioctl_dout;
+		else begin
+			if(state) state <= state + 1'd1;
+			case(state)
+				 0: if(ioctl_dout == ":") state <= state + 1'd1;
+				 1: cnt[7:4]    <= digit;
+				 2: cnt[3:0]    <= digit;
+				 3: addr[15:12] <= digit;
+				 4: addr[11:8]  <= digit;
+				 5: addr[7:4]   <= digit;
+				 6: addr[3:0]   <= digit;
+				 7: code        <= digit;
+				 8: if({code,digit}) state <= 0;
+				 9: code        <= digit;
+				10: begin
+						rom[addr[14:1]][addr[0]] <= {code,digit};
+						addr <= addr + 1'd1;
+						cnt <= cnt - 1'd1;
+						state <= state - 1'd1;
+						if(cnt == 1) state <= 0;
+					end
+			endcase
+		end
+	end
+	
+	if(!ioctl_download) state <= 0;
+end
 
 wire Buzzer1, Buzzer2;
 wire oled_dc, oled_clk, oled_data;
