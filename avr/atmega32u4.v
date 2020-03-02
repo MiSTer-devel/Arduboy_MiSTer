@@ -506,8 +506,6 @@ atmega_tim_8bit # (
     .ocra_int_rst(int_timer0_compa_rst),
     .ocrb_int(int_timer0_compb),
     .ocrb_int_rst(int_timer0_compb_rst),
-
-    .t(),
     .oca(tim0_oca),
     .ocb(tim0_ocb),
     .oca_io_connect(tim0_oca_io_connact),
@@ -563,8 +561,6 @@ atmega_tim_16bit # (
     .ocrb_int_rst(int_timer1_compb_rst),
     .ocrc_int(int_timer1_compc),
     .ocrc_int_rst(int_timer1_compc_rst),
-
-    .t(),
     .oca(tim1_oca),
     .ocb(tim1_ocb),
     .occ(tim1_occ),
@@ -614,8 +610,6 @@ atmega_tim_16bit # (
     .tov_int_rst(int_timer3_ovf_rst),
     .ocra_int(int_timer3_compa),
     .ocra_int_rst(int_timer3_compa_rst),
-
-    .t(),
     .oca(tim3_oca),
     .oca_io_connect(tim3_oca_io_connact)
     );
@@ -689,8 +683,6 @@ atmega_tim_10bit # (
     .ocrc_int_rst(),
     .ocrd_int(int_timer4_compd),
     .ocrd_int_rst(int_timer4_compd_rst),
-
-    .t(),
     .oca(tim4_oca),
     .ocb(tim4_ocb),
     .occ(tim4_occ),

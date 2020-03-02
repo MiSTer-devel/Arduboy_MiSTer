@@ -112,7 +112,6 @@ module atmega_tim_16bit # (
     output ocrc_int,
     input ocrc_int_rst,
 
-    input t,
     output reg oca,
     output reg ocb,
     output reg occ,
@@ -443,6 +442,10 @@ begin
             begin
                 TCNT <= TCNT - 1'b1;
             end
+            else if(TCNT > top_value)
+            begin
+                TCNT <= top_value;
+            end
             // OCRA
             if(TCNT == OCRA)
             begin
@@ -451,8 +454,8 @@ begin
                     default:
                     begin
                         case(OCRA)
-                            16'h0000:   oca <= 1'b0;
-                            16'hFFFF:   oca <= 1'b1;
+                            16'h0000: oca <= 1'b0;
+                            16'hFFFF: oca <= 1'b1;
                             default:
                             begin
                                 if(up_count)
@@ -499,8 +502,8 @@ begin
                         default:
                         begin
                             case(OCRB)
-                                16'h0000:   ocb <= 1'b0;
-                                16'hFFFF:   ocb <= 1'b1;
+                                16'h0000: ocb <= 1'b0;
+                                16'hFFFF: ocb <= 1'b1;
                                 default:
                                 begin
                                     if(up_count)
@@ -547,8 +550,8 @@ begin
                         default:
                         begin
                             case(OCRC)
-                                16'h0000:   occ <= 1'b0;
-                                16'hFFFF:   occ <= 1'b1;
+                                16'h0000: occ <= 1'b0;
+                                16'hFFFF: occ <= 1'b1;
                                 default:
                                 begin
                                     if(up_count)

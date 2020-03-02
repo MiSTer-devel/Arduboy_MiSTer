@@ -124,7 +124,6 @@ module atmega_tim_10bit # (
     output ocrd_int,
     input ocrd_int_rst,
 
-    input t,
     output reg oca,
     output reg ocb,
     output reg occ,

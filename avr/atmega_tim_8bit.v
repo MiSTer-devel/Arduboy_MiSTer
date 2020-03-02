@@ -97,7 +97,6 @@ module atmega_tim_8bit # (
     output ocrb_int,
     input ocrb_int_rst,
 
-    input t,
     output reg oca,
     output reg ocb,
     output oca_io_connect,

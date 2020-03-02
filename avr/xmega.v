@@ -278,7 +278,7 @@ always @*
 begin
     pgm_data_int = pgm_data;
     int_registered = 1'b0;
-    int_rst = 1'b0;
+    int_rst = 0;
     if(VECTOR_INT_TABLE_SIZE != 0)
     begin
         if(~skip_next_clock & ~cnt_rst)
@@ -304,7 +304,7 @@ begin
                 begin
                     pgm_data_int = pgm_data;
                     int_registered = 1'b0;
-                    int_rst = 1'b0;
+                    int_rst = 0;
                 end
             endcase
         end
@@ -463,12 +463,12 @@ end
 initial begin
     SP = 8'h00;
     SREG = 8'h00;
-    data_addr_int = 'h00000000;
+    data_addr_int = 0;
     data_out_int = 8'h00;
     io_addr_int = 6'h00;
     io_out_int = 8'h00;
     PC_TMP_H = 8'h00;
-    int_rst = 1'b0;
+    int_rst = 0;
 end
 
 always @ (posedge clk or posedge core_rst)
@@ -478,19 +478,19 @@ begin
         cnt_rst = 1'b1;
         PC <= 'h000000;
         state_cnt <= `STEP0;
-        //SP <= 8'h00;
-        //SREG <= 8'h00;
-        //data_addr_int <= 'h00000000;
-        //data_out_int <= 8'h00;
-        //io_addr_int <= 6'h00;
-        //io_out_int = 8'h00;
-        //PC_TMP_H <= 8'h00;
-        //int_rst <= 1'b0;
+        SP <= 8'h00;
+        SREG <= 8'h00;
+        data_addr_int <= 0;
+        data_out_int <= 8'h00;
+        io_addr_int <= 6'h00;
+        io_out_int = 8'h00;
+        PC_TMP_H <= 8'h00;
+        //int_rst <= 0;
     end
     else
     begin
         PC <= PC_PLUS_ONE;
-        //data_addr_int <= 'h00000000;
+        //data_addr_int <= 0;
         //data_out_int <= 8'h00;
         data_write_int <= 1'b0;
         data_read_int <= 1'b0;

@@ -157,38 +157,38 @@ always @ (posedge clk_avr) pgm_data <= rom[pgm_addr];
 
 wire [3:0] digit = (ioctl_dout[7:4] != 3) ? (ioctl_dout[3:0] + 4'd9) : ioctl_dout[3:0];
 always @ (posedge clk_sys) begin
-	reg  [3:0] state = 0;
-	reg  [7:0] cnt;
-	reg [15:0] addr;
-	reg  [3:0] code;
+    reg  [3:0] state = 0;
+    reg  [7:0] cnt;
+    reg [15:0] addr;
+    reg  [3:0] code;
 
-	if (ioctl_wr) begin
-		if(!ioctl_index) rom[ioctl_addr[14:1]][ioctl_addr[0]] <= ioctl_dout;
-		else begin
-			if(state) state <= state + 1'd1;
-			case(state)
-				 0: if(ioctl_dout == ":") state <= state + 1'd1;
-				 1: cnt[7:4]    <= digit;
-				 2: cnt[3:0]    <= digit;
-				 3: addr[15:12] <= digit;
-				 4: addr[11:8]  <= digit;
-				 5: addr[7:4]   <= digit;
-				 6: addr[3:0]   <= digit;
-				 7: code        <= digit;
-				 8: if({code,digit}) state <= 0;
-				 9: code        <= digit;
-				10: begin
-						rom[addr[14:1]][addr[0]] <= {code,digit};
-						addr <= addr + 1'd1;
-						cnt <= cnt - 1'd1;
-						state <= state - 1'd1;
-						if(cnt == 1) state <= 0;
-					end
-			endcase
-		end
-	end
-	
-	if(!ioctl_download) state <= 0;
+    if (ioctl_wr) begin
+        if(!ioctl_index) rom[ioctl_addr[14:1]][ioctl_addr[0]] <= ioctl_dout;
+        else begin
+            if(state) state <= state + 1'd1;
+            case(state)
+                 0: if(ioctl_dout == ":") state <= state + 1'd1;
+                 1: cnt[7:4]    <= digit;
+                 2: cnt[3:0]    <= digit;
+                 3: addr[15:12] <= digit;
+                 4: addr[11:8]  <= digit;
+                 5: addr[7:4]   <= digit;
+                 6: addr[3:0]   <= digit;
+                 7: code        <= digit;
+                 8: if({code,digit}) state <= 0;
+                 9: code        <= digit;
+                10: begin
+                        rom[addr[14:1]][addr[0]] <= {code,digit};
+                        addr <= addr + 1'd1;
+                        cnt <= cnt - 1'd1;
+                        state <= state - 1'd1;
+                        if(cnt == 1) state <= 0;
+                    end
+            endcase
+        end
+    end
+
+    if(!ioctl_download) state <= 0;
 end
 
 wire Buzzer1, Buzzer2;
