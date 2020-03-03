@@ -85,8 +85,8 @@ module emu
     output  [6:0] USER_OUT
 );
 
-assign HDMI_ARX    = status[1] ? 8'd1 : 8'd2;
-assign HDMI_ARY    = status[1] ? 8'd2 : 8'd1;
+assign HDMI_ARX    = status[1] ? 8'd9  : 8'd16;
+assign HDMI_ARY    = status[1] ? 8'd16 : 8'd9;
 assign VGA_F1      = 0;
 
 assign LED_POWER   = 0;
@@ -119,6 +119,7 @@ localparam CONF_STR =
     "R0,Reset;",
     "-;",
     "O1,Orientation,Horizontal,Vertical;",
+    "O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;", 
     "J1,A,B;",
     "V,v",`BUILD_DATE
 };
@@ -126,6 +127,8 @@ localparam CONF_STR =
 wire [31:0] joystick;
 wire [31:0] status;
 wire  [1:0] buttons;
+wire        forced_scandoubler;
+
 wire        ioctl_download;
 wire        ioctl_wr;
 wire [14:0] ioctl_addr;
@@ -140,6 +143,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
     .joystick_0(joystick),
     .status(status),
     .buttons(buttons),
+    .forced_scandoubler(forced_scandoubler),
 
     .ioctl_download(ioctl_download),
     .ioctl_index(ioctl_index),
@@ -227,7 +231,7 @@ vgaHdmi vgaHdmi
     .ce_pix(ce_pix)
 );
 
-arcade_video #(256,320,6) arcade_video
+arcade_video #(256,144,6) arcade_video
 (
     .*,
     .clk_video(clk_sys),
@@ -237,7 +241,7 @@ arcade_video #(256,320,6) arcade_video
     .gamma_bus(),
     .no_rotate(~status[1]),
     .rotate_ccw(1),
-    .fx(0)
+    .fx(status[5:3])
 );
 
 endmodule
