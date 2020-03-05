@@ -111,7 +111,7 @@ begin
         end
         if((&EECR[2:1]))
         begin
-            if(|eempe_timeout_cnt)
+            if(|eempe_timeout_cnt & ({EEARH, EEARL} > 2))
             begin
                 case(EECR[5:4])
                 2'b00: eep[{EEARH, EEARL}] <= EEDR_WRITE;
