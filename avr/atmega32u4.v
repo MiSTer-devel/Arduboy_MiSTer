@@ -91,6 +91,8 @@ module atmega32u4(
     output [`ROM_ADDR_WIDTH-1:0] pgm_addr,
     input [15:0] pgm_data,
     input [5:0] buttons,
+    input [7:0] joystick_analog,
+    input status,
     output [2:0] RGB,
     output Buzzer1, Buzzer2, DC, spi_scl, spi_mosi
     );
@@ -268,8 +270,10 @@ unstable_counters unstable_counters
 (
     .clk(clk),
     .rst(rst),
-    .en((data_addr[7:0] == 8'h78) &&
-        (data_read & ~ram_sel)), // ADC Data Register Low byte
+    .rd(data_read & ~ram_sel),
+    .addr(data_addr[7:0]),
+    .joystick_analog(joystick_analog),
+    .status(status),
     .dat(random_d_out)
 );
 

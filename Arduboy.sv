@@ -120,11 +120,13 @@ localparam CONF_STR =
     "-;",
     "O1,Orientation,Horizontal,Vertical;",
     "O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
+    "OF,ADC,Random,AnalogStick;",
     "J1,A,B;",
     "V,v",`BUILD_DATE
 };
 
 wire [31:0] joystick;
+wire [15:0] joystick_analog;
 wire [31:0] status;
 wire  [1:0] buttons;
 wire        forced_scandoubler;
@@ -141,6 +143,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
     .HPS_BUS(HPS_BUS),
     .conf_str(CONF_STR),
     .joystick_0(joystick),
+    .joystick_analog_0(joystick_analog),
     .status(status),
     .buttons(buttons),
     .forced_scandoubler(forced_scandoubler),
@@ -205,6 +208,8 @@ atmega32u4 atmega32u4
     .pgm_addr(pgm_addr),
     .pgm_data(pgm_data),
     .buttons(~(status[1] ? {joystick[5:4], joystick[1], joystick[0], joystick[2], joystick[3]} : joystick[5:0])),
+    .joystick_analog(joystick_analog[7:0]),
+    .status(status[15]),
     .RGB({LED_USER, LED_DISK[0]}),
     .Buzzer1(Buzzer1),
     .Buzzer2(Buzzer2),
