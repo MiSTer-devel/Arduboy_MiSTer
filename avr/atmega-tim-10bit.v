@@ -40,6 +40,7 @@
 `define COM0A0  6
 `define COM0A1  7
 
+
 //`define TCCR0B    ('h00)
 `define CS00    0
 `define CS01    1
@@ -77,13 +78,11 @@
 
 
 
-
 module atmega_tim_10bit # (
     parameter PLATFORM = "XILINX",
     parameter USE_OCRA = "TRUE",
     parameter USE_OCRB = "TRUE",
     parameter USE_OCRD = "TRUE",
-    parameter BUS_ADDR_IO_LEN = 6,
     parameter BUS_ADDR_DATA_LEN = 8,
     parameter TCCRA_ADDR = 'hc0,
     parameter TCCRB_ADDR = 'hc1,
@@ -97,17 +96,13 @@ module atmega_tim_10bit # (
     parameter OCRC_ADDR = 'hd1,
     parameter OCRD_ADDR = 'hd2,
     parameter TIMSK_ADDR = 'h72,
-    parameter TIFR_ADDR = 'h19
+    parameter TIFR_ADDR = 'h39
 )(
     input rst,
+    input halt,
     input clk,
     input clk_pll,
     input pll_enabled,
-    input [BUS_ADDR_IO_LEN-1:0]addr_io,
-    input wr_io,
-    input rd_io,
-    input [7:0]bus_io_in,
-    output reg [7:0]bus_io_out,
     input [BUS_ADDR_DATA_LEN-1:0]addr_dat,
     input wr_dat,
     input rd_dat,
@@ -123,7 +118,6 @@ module atmega_tim_10bit # (
     input ocrc_int_rst,
     output ocrd_int,
     input ocrd_int_rst,
-
     output reg oca,
     output reg ocb,
     output reg occ,
@@ -187,25 +181,21 @@ reg [13:0]presc_cnt;
 always @(posedge rst or posedge clk_pll)
 begin
     if(rst)
-    begin
         presc_cnt <= 10'h000;
-    end
     else
-    begin
         presc_cnt <= presc_cnt + 14'd1;
-    end
 end
 /* !Prescaller */
 
 /* Prescaller selection implementation */
 wire [15:0]tim_clks = {presc_cnt, clk_pll, 1'b0};
-always @*
+always @ *
 begin
     clk_int = tim_clks[TCCRB[`CS03:`CS00]];
 end
 reg updt_ocr_on_top;
 reg updt_ocr_on_bottom;
-always @*
+always @ *
 begin
     casex({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
         3'b0xx: // Imediate.
@@ -227,13 +217,13 @@ begin
 end
 
 reg [10:0]top_value;
-always @*
+always @ *
 begin
     top_value = OCRC_int;
 end
 
 reg [10:0]t_ovf_value;
-always @*
+always @ *
 begin
     case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
         3'b101, 3'b111: t_ovf_value = 10'h000;
@@ -242,156 +232,44 @@ begin
 end
 
 // Read registers.
-always @*
+always @ *
 begin
     if(rst)
     begin
-        bus_io_out = 8'h00;
         bus_dat_out = 8'h00;
     end
     else
     begin
-        bus_io_out = 8'h00;
         bus_dat_out = 8'h00;
-        if(rd_io)
-        begin
-            case(addr_io)
-                TCCRA_ADDR:
-                begin
-                    if(TCCRA_ADDR < 'h40)
-                        bus_io_out = TCCRA;
-                end
-                TCCRB_ADDR:
-                begin
-                    if(TCCRB_ADDR < 'h40)
-                        bus_io_out = TCCRB;
-                end
-                TCCRC_ADDR:
-                begin
-                    if(TCCRC_ADDR < 'h40)
-                        bus_io_out = TCCRC;
-                end
-                TCCRD_ADDR:
-                begin
-                    if(TCCRD_ADDR < 'h40)
-                        bus_io_out = TCCRD;
-                end
-                TCCRE_ADDR:
-                begin
-                    if(TCCRE_ADDR < 'h40)
-                        bus_io_out = TCCRE;
-                end
-                TCNTL_ADDR:
-                begin
-                    if(TCNTL_ADDR < 'h40)
-                        bus_io_out = TCNTL;
-                end
-                TCH_ADDR:
-                begin
-                    if(TCH_ADDR < 'h40)
-                        bus_io_out = TMP_REG;
-                end
-                OCRA_ADDR:
-                begin
-                    if(OCRA_ADDR < 'h40 && USE_OCRA == "TRUE")
-                        bus_io_out = OCRA;
-                end
-                OCRB_ADDR:
-                begin
-                    if(OCRB_ADDR < 'h40 && USE_OCRB == "TRUE")
-                        bus_io_out = OCRB;
-                end
-                OCRC_ADDR:
-                begin
-                    if(OCRC_ADDR < 'h40)
-                        bus_io_out = OCRC;
-                end
-                OCRD_ADDR:
-                begin
-                    if(OCRD_ADDR < 'h40 && USE_OCRD == "TRUE")
-                        bus_io_out = OCRD;
-                end
-                TIFR_ADDR:
-                begin
-                    if(TIFR_ADDR < 'h40)
-                        bus_io_out = TIFR;
-                end
-                TIMSK_ADDR:
-                begin
-                    if(TIMSK_ADDR < 'h40)
-                        bus_io_out = TIMSK;
-                end
-                default: bus_io_out = 8'h00;
-            endcase
-        end
+        if(rd_dat & addr_dat == TIFR_ADDR)
+            bus_dat_out = TIFR;
         if(rd_dat)
         begin
             case(addr_dat)
-                TCCRA_ADDR:
-                begin
-                    if(TCCRA_ADDR >= 'h40)
-                        bus_dat_out = TCCRA;
-                end
-                TCCRB_ADDR:
-                begin
-                    if(TCCRB_ADDR >= 'h40)
-                        bus_dat_out = TCCRB;
-                end
-                TCCRC_ADDR:
-                begin
-                    if(TCCRC_ADDR >= 'h40)
-                        bus_dat_out = TCCRC;
-                end
-                TCCRD_ADDR:
-                begin
-                    if(TCCRD_ADDR >= 'h40)
-                        bus_dat_out = TCCRD;
-                end
-                TCCRE_ADDR:
-                begin
-                    if(TCCRE_ADDR >= 'h40)
-                        bus_dat_out = TCCRE;
-                end
-                TCNTL_ADDR:
-                begin
-                    if(TCNTL_ADDR >= 'h40)
-                        bus_dat_out = TCNTL;
-                end
-                TCH_ADDR:
-                begin
-                    if(TCH_ADDR >= 'h40)
-                        bus_dat_out = TMP_REG;
-                end
+                TCCRA_ADDR: bus_dat_out = TCCRA;
+                TCCRB_ADDR: bus_dat_out = TCCRB;
+                TCCRC_ADDR: bus_dat_out = TCCRC;
+                TCCRD_ADDR: bus_dat_out = TCCRD;
+                TCCRE_ADDR: bus_dat_out = TCCRE;
+                TCNTL_ADDR: bus_dat_out = TCNTL;
+                TCH_ADDR: bus_dat_out = TMP_REG;
                 OCRA_ADDR:
                 begin
-                    if(OCRA_ADDR >= 'h40 && USE_OCRA == "TRUE")
+                    if(USE_OCRA == "TRUE")
                         bus_dat_out = OCRA;
                 end
                 OCRB_ADDR:
                 begin
-                    if(OCRB_ADDR >= 'h40 && USE_OCRB == "TRUE")
+                    if(USE_OCRB == "TRUE")
                         bus_dat_out = OCRB;
                 end
-                OCRC_ADDR:
-                begin
-                    if(OCRC_ADDR >= 'h40)
-                        bus_dat_out = OCRC;
-                end
+                OCRC_ADDR: bus_dat_out = OCRC;
                 OCRD_ADDR:
                 begin
-                    if(OCRD_ADDR >= 'h40 && USE_OCRD == "TRUE")
+                    if(USE_OCRD == "TRUE")
                         bus_dat_out = OCRD;
                 end
-                (TIFR_ADDR + 'h20):
-                begin
-                    bus_dat_out = TIFR;
-                end
-                TIMSK_ADDR:
-                begin
-                    if(TIMSK_ADDR >= 'h40)
-                        bus_dat_out = TIMSK;
-                end
-                default: bus_dat_out = 8'h00;
+                TIMSK_ADDR: bus_dat_out = TIMSK;
             endcase
         end
     end
@@ -414,10 +292,10 @@ begin
         OCRB <= 10'h000;
         OCRC <= 10'h000;
         OCRD <= 10'h000;
-        OCRA_int = 10'h000;
-        OCRB_int = 10'h000;
-        OCRC_int = 10'h000;
-        OCRD_int = 10'h000;
+        OCRA_int <= 10'h000;
+        OCRB_int <= 10'h000;
+        OCRC_int <= 10'h000;
+        OCRD_int <= 10'h000;
         TIMSK <= 8'h00;
         TIFR <= 8'h00;
         tov_p <= 1'b0;
@@ -488,19 +366,13 @@ begin
         clk_int_del <= clk_int; // Shift prescaller clock to a delay register every IO core positive edge clock to detect prescaller positive edges.
         if(((~clk_int_del & clk_int) || TCCRB[`CS03:`CS00] == 4'b0001) && TCCRB[`CS03:`CS00] != 4'b0000) // If prescaller is 1 we bypass the prescaller clock edge detector, if 0, we disable the timer, if pll is disabled, the counter clock is maximum clk/2.
         begin
-            if(up_count)
-            begin
+            if(up_count & ~halt)
                 {TCH, TCNTL} <= {TCH, TCNTL} + 10'd1;
-            end
-            else
-            begin
+            else if(~up_count & ~halt)
                 {TCH, TCNTL} <= {TCH, TCNTL} - 10'd1;
-            end
             // OCRA
             if(updt_ocr_on_top ? ({TCH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCH, TCNTL} == 10'h000) : ({TCH, TCNTL} == OCRA_int)))
-            begin
                 OCRA_int = OCRA;
-            end
             if(USE_OCRA == "TRUE")
             begin
                 if({TCH, TCNTL} == OCRA_int)
@@ -549,9 +421,7 @@ begin
                     if(TIMSK[`OCIE0A])
                     begin
                         if(ocra_p == ocra_n && clk_active == 1'b1)
-                        begin
                             ocra_p <= ~ocra_p;
-                        end
                     end
                     else
                     begin
@@ -559,20 +429,15 @@ begin
                         ocra_n <= 1'b0;
                     end
                 end
-                else
-                if(TCCRD[`WGM00] & TCCRA[`PWMA] & {TCH, TCNTL} == 10'h000)
-                begin
+                else if(TCCRD[`WGM00] & TCCRA[`PWMA] & {TCH, TCNTL} == 10'h000)
                     oca <= 1'b0;
-                end
             end
             // !OCRA
             if(USE_OCRB == "TRUE")
             begin
                 // OCRB
                 if(updt_ocr_on_top ? ({TCH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCH, TCNTL} == 10'h000) : ({TCH, TCNTL} == OCRB_int)))
-                begin
                     OCRB_int = OCRB;
-                end
                 if({TCH, TCNTL} == OCRB_int)
                 begin
                     case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
@@ -619,9 +484,7 @@ begin
                     if(TIMSK[`OCIE0B])
                     begin
                         if(ocrb_p == ocrb_n && clk_active == 1'b1)
-                        begin
                             ocrb_p <= ~ocrb_p;
-                        end
                     end
                     else
                     begin
@@ -629,11 +492,8 @@ begin
                         ocrb_n <= 1'b0;
                     end
                 end
-                else
-                if(TCCRD[`WGM00] & TCCRA[`PWMB] & {TCH, TCNTL} == 10'h000)
-                begin
+                else if(TCCRD[`WGM00] & TCCRA[`PWMB] & {TCH, TCNTL} == 10'h000)
                     oca <= 1'b0;
-                end
             end // USE_OCRB != "TRUE"
             // OCRC
             if(updt_ocr_on_top ? ({TCH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCH, TCNTL} == 10'h000) : ({TCH, TCNTL} == OCRC_int)))
@@ -644,9 +504,7 @@ begin
             begin
                 // OCRD
                 if(updt_ocr_on_top ? ({TCH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCH, TCNTL} == 10'h000) : ({TCH, TCNTL} == OCRD_int)))
-                begin
                     OCRD_int = OCRD;
-                end
                 if({TCH, TCNTL} == OCRD_int)
                 begin
                     case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
@@ -693,9 +551,7 @@ begin
                     if(TIMSK[`OCIE0D])
                     begin
                         if(ocrd_p == ocrd_n && clk_active == 1'b1)
-                        begin
                             ocrd_p <= ~ocrd_p;
-                        end
                     end
                     else
                     begin
@@ -703,21 +559,16 @@ begin
                         ocrd_n <= 1'b0;
                     end
                 end
-                else
-                if(TCCRD[`WGM00] & TCCRA[`PWMD] & {TCH, TCNTL} == 10'h000)
-                begin
+                else if(TCCRD[`WGM00] & TCCRA[`PWMD] & {TCH, TCNTL} == 10'h000)
                     oca <= 1'b0;
-                end
             end // USE_OCRD != "TRUE"
             // TCNT overflow logick.
-            if({TCH, TCNTL} == t_ovf_value)
+            if(&{{TCH, TCNTL} == t_ovf_value, ~halt})
             begin
                 if(TIMSK[`TOIE0])
                 begin
                     if(tov_p == tov_n && clk_active == 1'b1)
-                    begin
                         tov_p <= ~tov_p;
-                    end
                 end
                 else
                 begin
@@ -725,7 +576,7 @@ begin
                     tov_n <= 1'b0;
                 end
             end
-            if({TCH, TCNTL} == top_value)
+            if(&{{TCH, TCNTL} == top_value, ~halt})
             begin
                 case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
                     3'b101:
@@ -736,7 +587,7 @@ begin
                     default: {TCH, TCNTL} <= 10'h000;
                 endcase
             end
-            else if({TCH, TCNTL} == 10'h000)
+            else if(&{{TCH, TCNTL} == 10'h000, ~halt})
             begin
                 case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
                     3'b101:
@@ -751,187 +602,43 @@ begin
         clk_sys_del <= clk; // We need this because the system clk is slower than PLL clock for this timer.
         if({clk_sys_del, clk} == 2'b01 | ~pll_enabled)
         begin
-            if(wr_io)
-            begin
-                case(addr_io)
-                    TCCRA_ADDR:
-                    begin
-                        if(TCCRA_ADDR < 'h40)
-                            TCCRA <= bus_io_in;
-                    end
-                    TCCRB_ADDR:
-                    begin
-                        if(TCCRB_ADDR < 'h40)
-                            TCCRB <= bus_io_in;
-                    end
-                    TCCRC_ADDR:
-                    begin
-                        if(TCCRC_ADDR < 'h40)
-                            TCCRC <= bus_io_in;
-                    end
-                    TCCRD_ADDR:
-                    begin
-                        if(TCCRD_ADDR < 'h40)
-                            TCCRD <= bus_io_in;
-                    end
-                    TCCRE_ADDR:
-                    begin
-                        if(TCCRE_ADDR < 'h40)
-                            TCCRE <= bus_io_in;
-                    end
-                    TCNTL_ADDR:
-                    begin
-                        if(TCNTL_ADDR < 'h40)
-                            TCNTL <= bus_io_in;
-                    end
-                    TCH_ADDR:
-                    begin
-                        if(TCH_ADDR < 'h40)
-                        begin
-                            TCH <= bus_io_in;
-                            TMP_REG <= bus_io_in;
-                        end
-                    end
-                    OCRA_ADDR:
-                    begin
-                        if(OCRA_ADDR < 'h40 && USE_OCRA == "TRUE")
-                        begin
-                            OCRA <= {TMP_REG, bus_io_in};
-                        end
-                    end
-                    OCRB_ADDR:
-                    begin
-                        if(OCRB_ADDR < 'h40 && USE_OCRB == "TRUE")
-                        begin
-                            OCRB <= {TMP_REG, bus_io_in};
-                        end
-                    end
-                    OCRC_ADDR:
-                    begin
-                        if(OCRC_ADDR < 'h40)
-                        begin
-                            OCRC <= {TMP_REG, bus_io_in};
-                        end
-                    end
-                    OCRD_ADDR:
-                    begin
-                        if(OCRD_ADDR < 'h40 && USE_OCRD == "TRUE")
-                        begin
-                            OCRD <= {TMP_REG, bus_io_in};
-                        end
-                    end
-                    TIFR_ADDR:
-                    begin
-                        if(TIFR_ADDR < 'h40)
-                            TIFR <= TIFR & ~bus_io_in;
-                    end
-                    TIMSK_ADDR:
-                    begin
-                        if(TIMSK_ADDR < 'h40)
-                            TIMSK <= bus_io_in;
-                    end
-                endcase
-            end
+            if(wr_dat & addr_dat == TIFR_ADDR)
+                TIFR <= TIFR & ~bus_dat_in;
             if(wr_dat)
             begin
                 case(addr_dat)
-                    TCCRA_ADDR:
-                    begin
-                        if(TCCRA_ADDR >= 'h40)
-                            TCCRA <= bus_dat_in;
-                    end
-                    TCCRB_ADDR:
-                    begin
-                        if(TCCRB_ADDR >= 'h40)
-                            TCCRB <= bus_dat_in;
-                    end
-                    TCCRC_ADDR:
-                    begin
-                        if(TCCRC_ADDR >= 'h40)
-                            TCCRC <= bus_dat_in;
-                    end
-                    TCCRD_ADDR:
-                    begin
-                        if(TCCRD_ADDR >= 'h40)
-                            TCCRD <= bus_dat_in;
-                    end
-                    TCCRE_ADDR:
-                    begin
-                        if(TCCRE_ADDR >= 'h40)
-                            TCCRE <= bus_dat_in;
-                    end
-                    TCNTL_ADDR:
-                    begin
-                        if(TCNTL_ADDR >= 'h40)
-                            TCNTL <= bus_dat_in;
-                    end
+                    TCCRA_ADDR: TCCRA <= bus_dat_in;
+                    TCCRB_ADDR: TCCRB <= bus_dat_in;
+                    TCCRC_ADDR: TCCRC <= bus_dat_in;
+                    TCCRD_ADDR: TCCRD <= bus_dat_in;
+                    TCCRE_ADDR: TCCRE <= bus_dat_in;
+                    TCNTL_ADDR: TCNTL <= bus_dat_in;
                     TCH_ADDR:
                     begin
-                        if(TCH_ADDR >= 'h40)
-                        begin
-                            TCH <= bus_dat_in;
-                            TMP_REG <= bus_dat_in;
-                        end
+                        TCH <= bus_dat_in;
+                        TMP_REG <= bus_dat_in;
                     end
                     OCRA_ADDR:
                     begin
-                        if(OCRA_ADDR >= 'h40 && USE_OCRA == "TRUE")
-                        begin
+                        if(USE_OCRA == "TRUE")
                             OCRA <= {TMP_REG, bus_dat_in};
-                        end
                     end
                     OCRB_ADDR:
                     begin
-                        if(OCRB_ADDR >= 'h40 && USE_OCRB == "TRUE")
-                        begin
+                        if(USE_OCRB == "TRUE")
                             OCRB <= {TMP_REG, bus_dat_in};
-                        end
                     end
-                    OCRC_ADDR:
-                    begin
-                        if(OCRC_ADDR >= 'h40)
-                        begin
-                            OCRC <= {TMP_REG, bus_dat_in};
-                        end
-                    end
+                    OCRC_ADDR: OCRC <= {TMP_REG, bus_dat_in};
                     OCRD_ADDR:
                     begin
-                        if(OCRD_ADDR >= 'h40 && USE_OCRD == "TRUE")
-                        begin
+                        if(USE_OCRD == "TRUE")
                             OCRD <= {TMP_REG, bus_dat_in};
-                        end
                     end
-                    (TIFR_ADDR + 'h20):
-                    begin
-                        TIFR <= TIFR & ~bus_dat_in;
-                    end
-                    TIMSK_ADDR:
-                    begin
-                        if(TIMSK_ADDR >= 'h40)
-                            TIMSK <= bus_dat_in;
-                    end
+                    TIMSK_ADDR: TIMSK <= bus_dat_in;
                 endcase
             end
-            if(rd_io)
-            begin
-                case(addr_io)
-                    TCNTL_ADDR:
-                    begin
-                        if(TCNTL_ADDR < 'h40)
-                            TMP_REG <= TCH;
-                    end
-                endcase
-            end
-            if(rd_dat)
-            begin
-                case(addr_dat)
-                    TCNTL_ADDR:
-                    begin
-                        if(TCNTL_ADDR >= 'h40)
-                            TMP_REG <= TCH;
-                    end
-                endcase
-            end
+            if(rd_dat & addr_dat == TCNTL_ADDR)
+                TMP_REG <= TCH;
         end
     end
 end
@@ -942,13 +649,13 @@ assign ocrb_int = TIFR[`OCF0B];
 assign ocrc_int = TIFR[`OCF0C];
 assign ocrd_int = TIFR[`OCF0D];
 
-assign ocap_io_connect = (TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : 1'b1;
-assign ocan_io_connect = (TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : 1'b1;
-assign ocbp_io_connect = (TCCRA[`COM0B1:`COM0B0] == 2'b00) ? 1'b0 : 1'b1;
-assign ocbn_io_connect = (TCCRA[`COM0B1:`COM0B0] == 2'b00) ? 1'b0 : 1'b1;
+assign ocap_io_connect = USE_OCRA == "TRUE" ? ((TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
+assign ocan_io_connect = USE_OCRA == "TRUE" ? ((TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
+assign ocbp_io_connect = USE_OCRB == "TRUE" ? ((TCCRA[`COM0B1:`COM0B0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
+assign ocbn_io_connect = USE_OCRB == "TRUE" ? ((TCCRA[`COM0B1:`COM0B0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
 assign occp_io_connect = 1'b0;//(TCCRA[`COM0C1:`COM0C0] == 2'b00 || TCCRA[`COM0C1:`COM0C0] == 2'b01) ? 1'b0 : 1'b1;
 assign occn_io_connect = 1'b0;//(TCCRA[`COM0C1:`COM0C0] == 2'b00 || TCCRA[`COM0C1:`COM0C0] == 2'b01) ? 1'b0 : 1'b1;
-assign ocdp_io_connect = (TCCRC[`COM0D1:`COM0D0] == 2'b00) ? 1'b0 : 1'b1;
-assign ocdn_io_connect = (TCCRC[`COM0D1:`COM0D0] == 2'b00) ? 1'b0 : 1'b1;
+assign ocdp_io_connect = USE_OCRD == "TRUE" ? ((TCCRC[`COM0D1:`COM0D0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
+assign ocdn_io_connect = USE_OCRD == "TRUE" ? ((TCCRC[`COM0D1:`COM0D0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
 
 endmodule

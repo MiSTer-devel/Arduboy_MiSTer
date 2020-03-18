@@ -91,7 +91,8 @@ assign VGA_F1      = 0;
 
 assign LED_POWER   = 0;
 assign LED_DISK[1] = 0;
-assign USER_OUT    = '1;
+assign USER_OUT[0] = 1;
+assign USER_OUT[6:2] = 5'd0;
 
 assign AUDIO_S     = 0;
 assign AUDIO_L     = {1'b0,{15{Buzzer1}}} + {1'b0,{15{Buzzer2}}};
@@ -204,7 +205,7 @@ wire oled_dc, oled_clk, oled_data;
 atmega32u4 atmega32u4
 (
     .clk(clk_avr),
-    .rst_in(reset),
+    .rst(reset),
     .pgm_addr(pgm_addr),
     .pgm_data(pgm_data),
     .buttons(~(status[1] ? {joystick[5:4], joystick[1], joystick[0], joystick[2], joystick[3]} : joystick[5:0])),
@@ -215,7 +216,9 @@ atmega32u4 atmega32u4
     .Buzzer2(Buzzer2),
     .DC(oled_dc),
     .spi_scl(oled_clk),
-    .spi_mosi(oled_data)
+    .spi_mosi(oled_data),
+    .uart_rx(USER_IN[0]),
+    .uart_tx(USER_OUT[1])
 );
 
 wire pixelValue, ce_pix;

@@ -24,33 +24,33 @@
 
 `timescale 1ns / 1ps
 
-
 module atmega_pio # (
     parameter PLATFORM = "XILINX",
-    parameter BUS_ADDR_DATA_LEN = 16,
-    parameter PORT_ADDR = 0,
-    parameter DDR_ADDR = 1,
-    parameter PIN_ADDR = 2,
+    parameter BUS_ADDR_DATA_LEN = 8,
+    parameter PORT_WIDTH = 8,
+    parameter USE_CLEAR_SET = "FALSE",
+    parameter PORT_OUT_ADDR = 'h20,
+    parameter PORT_CLEAR_ADDR = 'h00,
+    parameter PORT_SET_ADDR = 'h01,
+    parameter DDR_ADDR = 'h23,
+    parameter PIN_ADDR = 'h24,
     parameter PINMASK = 8'hFF,
     parameter PULLUP_MASK = 8'h0,
-    parameter PULLDN_MASK = 8'h0
+    parameter PULLDN_MASK = 8'h0,
+    parameter INVERSE_MASK = 8'h0,
+    parameter OUT_ENABLED_MASK = 8'hFF
 )(
     input rst,
     input clk,
-    input [BUS_ADDR_DATA_LEN-1:0]addr,
-    input wr,
-    input rd,
-    input [7:0]bus_in,
-    output reg [7:0]bus_out,
 
-    input [7:0]addr_dat,
+    input [BUS_ADDR_DATA_LEN-1:0]addr_dat,
     input wr_dat,
     input rd_dat,
-    input [7:0]bus_dat_in,
-    output reg [7:0]bus_dat_out,
+    input [PORT_WIDTH - 1:0]bus_dat_in,
+    output reg [PORT_WIDTH - 1:0]bus_dat_out,
 
-    input [7:0]io_in,
-    output [7:0]io_out
+    input [PORT_WIDTH - 1:0]io_in,
+    output [PORT_WIDTH - 1:0]io_out
     );
 
 reg [7:0]DDR;
@@ -72,32 +72,11 @@ begin
         DDR <= 8'h00;
         PORT <= 8'h00;
     end
-    else if(wr)
-    begin
-        case(addr)
-        DDR_ADDR: DDR <= bus_in;
-        PORT_ADDR: PORT <= bus_in;
-        endcase
-    end
     else if(wr_dat)
     begin
         case(addr_dat)
-        (DDR_ADDR + 'h20): DDR <= bus_dat_in;
-        (PORT_ADDR + 'h20): PORT <= bus_dat_in;
-        endcase
-    end
-end
-
-always @*
-begin
-    bus_out = 8'h00;
-    if(rd & ~rst)
-    begin
-        case(addr)
-        PORT_ADDR: bus_out = PORT;
-        DDR_ADDR: bus_out = DDR;
-        PIN_ADDR: bus_out = io_in;
-        default: bus_out = 8'h00;
+        DDR_ADDR: DDR <= bus_dat_in;
+        PORT_OUT_ADDR: PORT <= bus_dat_in;
         endcase
     end
 end
@@ -108,57 +87,12 @@ begin
     if(rd_dat & ~rst)
     begin
         case(addr_dat)
-        (PORT_ADDR + 'h20): bus_dat_out = PORT;
-        (DDR_ADDR + 'h20): bus_dat_out = DDR;
-        (PIN_ADDR + 'h20): bus_dat_out = io_in;
+        PORT_OUT_ADDR: bus_dat_out = PORT;
+        DDR_ADDR: bus_dat_out = DDR;
+        PIN_ADDR: bus_dat_out = io_in;
         default: bus_dat_out = 8'h00;
         endcase
     end
 end
-
-/*
-genvar cnt;
-generate
-
-for (cnt = 0; cnt < 8; cnt = cnt + 1)
-begin:OUTS
-    if (PINMASK[cnt])
-    begin
-        assign io_out[cnt] = DDR[cnt] ? PORT[cnt] : 1'b0;
-    end
-    else
-    begin
-        assign io_out[cnt] = 1'b0;
-    end
-end
-
-for (cnt = 0; cnt < 8; cnt = cnt + 1)
-begin:PULLUPS
-    if (PULLUP_MASK[cnt] && PINMASK[cnt])
-    begin
-        if (PLATFORM == "XILINX")
-        begin
-            PULLUP PULLUP_inst (
-                .O(io_out[cnt])     // PullUp output (connect directly to top-level port)
-            );
-        end
-    end
-end
-
-for (cnt = 0; cnt < 8; cnt = cnt + 1)
-begin:PULLDOWNS
-    if (PULLDN_MASK[cnt] && PINMASK[cnt])
-    begin
-        if (PLATFORM == "XILINX")
-        begin
-            PULLDOWN PULLDOWN_inst (
-                .O(io_out[cnt])     // PullDown output (connect directly to top-level port)
-            );
-        end
-    end
-end
-
-endgenerate
-*/
 
 endmodule

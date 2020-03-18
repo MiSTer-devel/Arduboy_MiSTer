@@ -68,7 +68,6 @@ module atmega_tim_16bit # (
     parameter PLATFORM = "XILINX",
     parameter USE_OCRB = "TRUE",
     parameter USE_OCRC = "TRUE",
-    parameter BUS_ADDR_IO_LEN = 6,
     parameter BUS_ADDR_DATA_LEN = 8,
     parameter GTCCR_ADDR = 'h23,
     parameter TCCRA_ADDR = 'h80,
@@ -93,11 +92,6 @@ module atmega_tim_16bit # (
     input clk64,
     input clk256,
     input clk1024,
-    input [BUS_ADDR_IO_LEN-1:0]addr_io,
-    input wr_io,
-    input rd_io,
-    input [7:0]bus_io_in,
-    output reg [7:0]bus_io_out,
     input [BUS_ADDR_DATA_LEN-1:0]addr_dat,
     input wr_dat,
     input rd_dat,
@@ -131,6 +125,8 @@ reg [15:0]OCRB;
 reg [15:0]OCRC;
 reg [7:0]TIFR;
 reg [7:0]TIMSK;
+reg [7:0]TMP_REG_wr;
+reg [BUS_ADDR_DATA_LEN-1:0]TMP_REG_addr;
 
 reg tov_p;
 reg tov_n;
@@ -145,7 +141,6 @@ reg ocrc_n;
 //reg l2;
 wire t0_fall = 0;
 wire t0_rising = 0;
-//reg clk_int;
 wire clk_int;
 reg clk_int_del;
 
@@ -183,20 +178,6 @@ end*/
 /* !Sampling implementation */
 
 /* Prescaller selection implementation */
-/*always @*
-begin
-    case(TCCRB[`CS02:`CS00])
-    3'b001: clk_int = clk;
-    3'b010: clk_int = clk8;
-    3'b011: clk_int = clk64;
-    3'b100: clk_int = clk256;
-    3'b101: clk_int = clk1024;
-    3'b110: clk_int = t0_fall;
-    3'b111: clk_int = t0_rising;
-    default: clk_int = 1'b0;
-    endcase
-end*/
-
 wire [7:0]clk_mux = {t0_rising, t0_fall, clk1024, clk256, clk64, clk8, 2'b00};
 lpm_mux LPM_MUX_component (
             .data(clk_mux),
@@ -264,34 +245,14 @@ always @*
 begin
     if(rst)
     begin
-        bus_io_out = 8'h00;
         bus_dat_out = 8'h00;
     end
     else
     begin
-        bus_io_out = 8'h00;
         bus_dat_out = 8'h00;
-        if(rd_io)
-        begin
-            case(addr_io)
-                GTCCR_ADDR:
-                begin
-                    bus_io_out = GTCCR;
-                end
-                TIFR_ADDR:
-                begin
-                    bus_io_out = TIFR;
-                end
-                default: bus_io_out = 8'h00;
-            endcase
-        end
         if(rd_dat)
         begin
             case(addr_dat)
-                (GTCCR_ADDR + 'h20):
-                begin
-                    bus_dat_out = GTCCR;
-                end
                 TCCRA_ADDR:
                 begin
                     bus_dat_out = TCCRA;
@@ -348,7 +309,7 @@ begin
                     if(USE_OCRC == "TRUE")
                         bus_dat_out = OCRC[15:8];
                 end
-                (TIFR_ADDR + 'h20):
+                TIFR_ADDR:
                 begin
                     bus_dat_out = TIFR;
                 end
@@ -356,7 +317,6 @@ begin
                 begin
                     bus_dat_out = TIMSK;
                 end
-                default: bus_dat_out = 8'h00;
             endcase
         end
     end
@@ -367,6 +327,8 @@ always @ (posedge clk)
 begin
     if(rst)
     begin
+        TMP_REG_wr <= 8'h00;
+        TMP_REG_addr <= 8'h00;
         GTCCR <= 8'h00;
         TCCRA <= 8'h00;
         TCCRB <= 8'h00;
@@ -630,23 +592,10 @@ begin
             end
         end
         // Write registers
-        if(wr_io)
-        begin
-            case(addr_io)
-                GTCCR_ADDR:
-                begin
-                    GTCCR <= bus_io_in;
-                end
-                TIFR_ADDR:
-                begin
-                    TIFR <= TIFR & ~bus_io_in;
-                end
-            endcase
-        end
         if(wr_dat)
         begin
             case(addr_dat)
-                (GTCCR_ADDR + 'h20):
+                GTCCR_ADDR:
                 begin
                     GTCCR <= bus_dat_in;
                 end
@@ -662,54 +611,59 @@ begin
                 begin
                     TCCRC <= bus_dat_in;
                 end
-                TCNTL_ADDR:
+/*              TCNTL_ADDR:
                 begin
-                    TCNT[7:0] <= bus_dat_in;
+                    TCNT <= (TMP_REG_addr == TCNTH_ADDR) ? {TMP_REG_wr, bus_dat_in} : {8'd0, bus_dat_in};
                 end
                 TCNTH_ADDR:
                 begin
-                    TCNT[15:8] <= bus_dat_in;
-                end
+                    TMP_REG_wr <= bus_dat_in;
+                    TMP_REG_addr <= TCNTH_ADDR;
+                end */
                 ICRL_ADDR:
                 begin
-                    ICR[7:0] <= bus_dat_in;
+                    ICR <= (TMP_REG_addr == ICRH_ADDR) ? {TMP_REG_wr, bus_dat_in} : {8'd0, bus_dat_in};
                 end
                 ICRH_ADDR:
                 begin
-                    ICR[15:8] <= bus_dat_in;
+                    TMP_REG_wr <= bus_dat_in;
+                    TMP_REG_addr <= ICRH_ADDR;
                 end
                 OCRAL_ADDR:
                 begin
-                    OCRA[7:0] <= bus_dat_in;
+                    OCRA <= (TMP_REG_addr == OCRAH_ADDR) ? {TMP_REG_wr, bus_dat_in} : {8'd0, bus_dat_in};
                 end
                 OCRAH_ADDR:
                 begin
-                    OCRA[15:8] <= bus_dat_in;
+                    TMP_REG_wr <= bus_dat_in;
+                    TMP_REG_addr <= OCRAH_ADDR;
                 end
                 OCRBL_ADDR:
                 begin
                     if(USE_OCRB == "TRUE")
-                        OCRB[7:0] <= bus_dat_in;
+                        OCRB <= (TMP_REG_addr == OCRBH_ADDR) ? {TMP_REG_wr, bus_dat_in} : {8'd0, bus_dat_in};
                 end
                 OCRBH_ADDR:
                 begin
                     if(USE_OCRB == "TRUE")
-                        OCRB[15:8] <= bus_dat_in;
+                        TMP_REG_wr <= bus_dat_in;
+                        TMP_REG_addr <= OCRBH_ADDR;
                 end
                 OCRCL_ADDR:
                 begin
                     if(USE_OCRC == "TRUE")
-                        OCRC[7:0] <= bus_dat_in;
+                        OCRC <= (TMP_REG_addr == OCRCH_ADDR) ? {TMP_REG_wr, bus_dat_in} : {8'd0, bus_dat_in};
                 end
                 OCRCH_ADDR:
                 begin
                     if(USE_OCRC == "TRUE")
-                        OCRC[15:8] <= bus_dat_in;
+                        TMP_REG_wr <= bus_dat_in;
+                        TMP_REG_addr <= OCRCH_ADDR;
                 end
-                (TIFR_ADDR + 'h20):
+/*              TIFR_ADDR:
                 begin
                     TIFR <= TIFR & ~bus_dat_in;
-                end
+                end */
                 TIMSK_ADDR:
                 begin
                     TIMSK <= bus_dat_in;

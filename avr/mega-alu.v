@@ -20,11 +20,12 @@
 
 `timescale 1ns / 1ps
 
-`include "xmega_v.v"
+`include "mega-def.v"
 
-module xmega_alu # (
-        parameter  [`CORE_TYPE_BUS_LEN - 1:0]CORE_TYPE = `MEGA_XMEGA_1
-        )(
+module mega_alu # (
+    parameter PLATFORM = "XILINX",
+    parameter CORE_TYPE = `MEGA_XMEGA_1
+    )(
     input [15:0]inst,
     input [4:0]rda,
     input [15:0]rd,
@@ -35,21 +36,23 @@ module xmega_alu # (
     output reg[7:0]sreg_out
 );
 
-wire [6:0] index;
-assign index = {4'd0, inst[2:0]};
-
-wire [15:0]mul_result_u_int = rd * rr;
+//#pragma HLS RESOURCE variable=temp core=FMul_nodsp
 wire signed [7:0]mul_s_a = rd;
 wire signed [7:0]mul_s_b = rr;
 wire signed [8:0]mul_su_b = {1'b0, rr};
-wire signed [15:0]mul_result_s_int = mul_s_a * mul_s_b;
-wire signed [15:0]mul_result_s_u_int = mul_s_a * mul_su_b;
+wire [15:0]mul_result_u_int;
+wire signed [15:0]mul_result_s_int;
+wire signed [15:0]mul_result_s_u_int;
+
+assign mul_result_u_int = rd * rr;
+assign mul_result_s_int = mul_s_a * mul_s_b;
+assign mul_result_s_u_int = mul_s_a * mul_su_b;
 
 wire in_addr_1_and_2_equal = rda == rra;
 wire RD_8_IS_ZERO = &(~R[7:0]);
 wire RD_16_IS_ZERO = &(~R);
 
-always @*
+always @ *
 begin
     sreg_out = sreg_in;
     R = 16'h0000;
@@ -346,7 +349,7 @@ begin
         end
         `INSTRUCTION_BST:
         begin
-            sreg_out[`XMEGA_FLAG_T] = rd[index];
+            sreg_out[`XMEGA_FLAG_T] = rd[inst[2:0]];
         end
         default:
         begin

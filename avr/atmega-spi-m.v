@@ -36,20 +36,26 @@
 
 module atmega_spi_m # (
     parameter PLATFORM = "XILINX",
-    parameter BUS_ADDR_DATA_LEN = 6,
-    parameter SPCR_ADDR = 0,
-    parameter SPSR_ADDR = 1,
-    parameter SPDR_ADDR = 2,
+    parameter BUS_ADDR_DATA_LEN = 8,
+    parameter SPCR_ADDR = 'h20,
+    parameter SPSR_ADDR = 'h21,
+    parameter SPDR_ADDR = 'h22,
     parameter DINAMIC_BAUDRATE = "TRUE",
-    parameter BAUDRATE_DIVIDER = 1
+    parameter BAUDRATE_CNT_LEN = 8,
+    parameter BAUDRATE_DIVIDER = 1,
+    parameter USE_TX = "TRUE",
+    parameter USE_RX = "TRUE"
 )(
     input rst,
+    input halt,
     input clk,
-    input [BUS_ADDR_DATA_LEN-1:0]addr,
-    input wr,
-    input rd,
-    input [7:0]bus_in,
-    output reg [7:0]bus_out,
+
+    input [BUS_ADDR_DATA_LEN-1:0]addr_dat,
+    input wr_dat,
+    input rd_dat,
+    input [7:0]bus_dat_in,
+    output reg [7:0]bus_dat_out,
+
     output int_out,
     input int_rst,
     output io_connect,
@@ -79,39 +85,44 @@ reg [7:0]tx_shift_reg;
 
 reg [3:0]bit_cnt;
 
-reg [7:0]prescaller_cnt;
+reg [(BAUDRATE_CNT_LEN ? BAUDRATE_CNT_LEN - 1 : 0) : 0]prescaller_cnt;
 reg sckint;
-reg [7:0]prescdemux;
+reg [(BAUDRATE_CNT_LEN ? BAUDRATE_CNT_LEN - 1 : 0) : 0]prescdemux;
 
-always @*
+always @ (*)
 begin
-    bus_out = 8'b00;
-    if(rd)
+    bus_dat_out = 8'b00;
+    if(rd_dat)
     begin
-        case(addr)
-        SPCR_ADDR: bus_out = SPCR;
-        SPSR_ADDR: bus_out = SPSR;
-        SPDR_ADDR: bus_out = SPDR;
-        default: bus_out = 8'b00;
+        case(addr_dat)
+        SPCR_ADDR: bus_dat_out = SPCR;
+        SPSR_ADDR: bus_dat_out = SPSR;
+        SPDR_ADDR: bus_dat_out = SPDR;
         endcase
     end
 end
 
-always @*
+always @ (*)
 begin
-    case({SPSR[`ATMEGA_SPI_SPSR_SPI2X_bp], SPCR[`ATMEGA_SPI_SPCR_SPR1_bp], SPCR[`ATMEGA_SPI_SPCR_SPR0_bp]})
-    3'b000: prescdemux <= 1;
-    3'b001: prescdemux <= 8;
-    3'b010: prescdemux <= 32;
-    3'b011: prescdemux <= 64;
-    3'b100: prescdemux <= 0;
-    3'b101: prescdemux <= 4;
-    3'b110: prescdemux <= 16;
-    3'b111: prescdemux <= 32;
-    endcase
+    if(DINAMIC_BAUDRATE == "TRUE")
+    begin
+        case({SPSR[`ATMEGA_SPI_SPSR_SPI2X_bp], SPCR[`ATMEGA_SPI_SPCR_SPR1_bp], SPCR[`ATMEGA_SPI_SPCR_SPR0_bp]})
+            3'b000: prescdemux = 1;
+            3'b001: prescdemux = 8;
+            3'b010: prescdemux = 32;
+            3'b011: prescdemux = 64;
+            3'b100: prescdemux = 0;
+            3'b101: prescdemux = 4;
+            3'b110: prescdemux = 16;
+            3'b111: prescdemux = 32;
+        endcase
+    end
+    else
+    begin
+        prescdemux = BAUDRATE_DIVIDER;
+    end
 end
 
-reg rd_old;
 always @ (posedge clk)
 begin
     if(rst)
@@ -122,19 +133,18 @@ begin
         SPDR <= 8'h00;
         tx_shift_reg <= 8'h00;
         rx_shift_reg <= 8'hFF;
-        prescaller_cnt <= 8'h00;
+        prescaller_cnt <= 'h00;
         bit_cnt <= WORD_LEN;
         sckint <= 1'b0;
         stc_p <= 1'b0;
         spi_active <= 1'b0;
         sck_active <= 1'b0;
-        rd_old <= 1'b0;
     end
     else
     begin
-        if(SPCR[`ATMEGA_SPI_SPCR_EN_bp] & spi_active)
+        if(&{SPCR[`ATMEGA_SPI_SPCR_EN_bp], spi_active, ~halt})
         begin
-            if(prescaller_cnt)
+            if(prescaller_cnt & BAUDRATE_CNT_LEN != 0)
             begin
                 prescaller_cnt <= prescaller_cnt - 1;
             end
@@ -146,49 +156,54 @@ begin
                 if(~sckint)
                 begin
                     bit_cnt <= bit_cnt + 4'd1;
-                    if(bit_cnt == WORD_LEN - 1)
+                    if(USE_RX == "TRUE")
                     begin
+                        if(bit_cnt == WORD_LEN - 1)
+                        begin
+                            if(SPCR[`ATMEGA_SPI_SPCR_DORD_bp] == 1'b0)
+                            begin
+                                SPDR <= {rx_shift_reg[WORD_LEN - 2:0], miso};
+                            end
+                            else
+                            begin
+                                SPDR <= {miso, rx_shift_reg[WORD_LEN - 1:1]};
+                            end
+                        end
                         if(SPCR[`ATMEGA_SPI_SPCR_DORD_bp] == 1'b0)
                         begin
-                            SPDR <= {rx_shift_reg[WORD_LEN - 2:0], miso};
+                            rx_shift_reg <= {rx_shift_reg[WORD_LEN - 2:0], miso};
                         end
                         else
                         begin
-                            SPDR <= {miso, rx_shift_reg[WORD_LEN - 1:0]};
+                            rx_shift_reg <= {miso, rx_shift_reg[WORD_LEN - 1:1]};
                         end
-                    end
-                    if(SPCR[`ATMEGA_SPI_SPCR_DORD_bp] == 1'b0)
-                    begin
-                        rx_shift_reg <= {rx_shift_reg[WORD_LEN - 2:0], miso};
-                    end
-                    else
-                    begin
-                        rx_shift_reg <= {miso, rx_shift_reg[WORD_LEN - 1:0]};
                     end
                 end
                 else
                 begin
 //tx
-                    if(~SPCR[`ATMEGA_SPI_SPCR_DORD_bp])
+                    if(USE_TX == "TRUE")
                     begin
-                        tx_shift_reg <= {tx_shift_reg[WORD_LEN - 2:0], 1'b0};
-                    end
-                    else
-                    begin
-                        tx_shift_reg <= {1'b0, tx_shift_reg[WORD_LEN - 1:1]};
+                        if(~SPCR[`ATMEGA_SPI_SPCR_DORD_bp])
+                        begin
+                            tx_shift_reg <= {tx_shift_reg[WORD_LEN - 2:0], 1'b0};
+                        end
+                        else
+                        begin
+                            tx_shift_reg <= {1'b0, tx_shift_reg[WORD_LEN - 1:1]};
+                        end
                     end
                 end
             end
         end
-        rd_old <= rd; // Read takes two cycles, we clear the flag after second cycle.
         if(int_rst)
         begin
             SPSR[`ATMEGA_SPI_SPSR_SPIF_bp] <= 1'b0;
         end
         else
-        if(rd_old & ~rd)
+        if(rd_dat)
         begin
-            case(addr)
+            case(addr_dat)
             SPSR_ADDR: SPSR[`ATMEGA_SPI_SPSR_SPIF_bp] <= 1'b0;
             endcase
         end
@@ -201,16 +216,16 @@ begin
         end
         if(bit_cnt == WORD_LEN)
         begin
-            if(wr)
+            if(wr_dat)
             begin
-                case(addr)
-                SPCR_ADDR: SPCR <= bus_in;
-                SPSR_ADDR: SPSR <= bus_in;
+                case(addr_dat)
+                SPCR_ADDR: SPCR <= bus_dat_in;
+                SPSR_ADDR: SPSR <= bus_dat_in;
                 SPDR_ADDR:
                 begin
                     if(SPCR[`ATMEGA_SPI_SPCR_EN_bp])
                     begin
-                        tx_shift_reg <= bus_in;
+                        tx_shift_reg <= bus_dat_in;
                         bit_cnt <= 4'h0;
                         prescaller_cnt <= prescdemux;
                         sckint <= 1'b0;
