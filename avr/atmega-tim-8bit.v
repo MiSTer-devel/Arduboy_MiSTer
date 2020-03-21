@@ -30,7 +30,7 @@
 `define PSRASY  1
 `define TSM     7
 
-//`define TCCR0A    ('h24)
+//`define TCCR0A ('h24)
 `define WGM00   0
 `define WGM01   1
 `define COM0B0  4
@@ -38,7 +38,7 @@
 `define COM0A0  6
 `define COM0A1  7
 
-//`define TCCR0B    ('h25)
+//`define TCCR0B ('h25)
 `define CS00    0
 `define CS01    1
 `define CS02    2
@@ -47,17 +47,16 @@
 `define FOC0A   7
 
 //`define TCNT0 ('h26)
-`define OCR0A   ('h27)
-`define OCR0B   ('h28)
+`define OCR0A ('h27)
+`define OCR0B ('h28)
 
-//`define TIMSK0    ('h6E)
+//`define TIMSK0 ('h6E)
 `undef TOIE0
 `undef OCIE0A
 `undef OCIE0B
 `define TOIE0   0
 `define OCIE0A  1
 `define OCIE0B  2
-
 
 module atmega_tim_8bit # (
     parameter PLATFORM = "XILINX",

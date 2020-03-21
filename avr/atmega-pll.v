@@ -20,7 +20,6 @@
 
 `timescale 1ns / 1ps
 
-
 module atmega_pll # (
 	parameter PLATFORM = "XILINX",
 	parameter BUS_ADDR_DATA_LEN = 16,

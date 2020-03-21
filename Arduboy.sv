@@ -146,7 +146,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
     .conf_str(CONF_STR),
     .joystick_0(joystick),
     .joystick_analog_0(joystick_analog),
-	 .paddle_0(paddle),
+    .paddle_0(paddle),
     .status(status),
     .buttons(buttons),
     .forced_scandoubler(forced_scandoubler),

@@ -33,7 +33,6 @@
 `define ATMEGA_SPI_SPSR_WCOL_bp         6
 `define ATMEGA_SPI_SPSR_SPI2X_bp        0
 
-
 module atmega_spi_m # (
     parameter PLATFORM = "XILINX",
     parameter BUS_ADDR_DATA_LEN = 8,
@@ -66,7 +65,6 @@ module atmega_spi_m # (
     output mosi
     );
 
-
 reg [7:0]SPCR;
 reg [7:0]SPSR;
 reg [7:0]SPDR;
@@ -89,7 +87,7 @@ reg [(BAUDRATE_CNT_LEN ? BAUDRATE_CNT_LEN - 1 : 0) : 0]prescaller_cnt;
 reg sckint;
 reg [(BAUDRATE_CNT_LEN ? BAUDRATE_CNT_LEN - 1 : 0) : 0]prescdemux;
 
-always @ (*)
+always @ *
 begin
     bus_dat_out = 8'b00;
     if(rd_dat)
@@ -102,7 +100,7 @@ begin
     end
 end
 
-always @ (*)
+always @ *
 begin
     if(DINAMIC_BAUDRATE == "TRUE")
     begin

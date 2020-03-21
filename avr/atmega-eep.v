@@ -20,7 +20,6 @@
 
 `timescale 1ns / 1ps
 
-
 module atmega_eep # (
     parameter PLATFORM = "XILINX",
     parameter BUS_ADDR_DATA_LEN = 8,
@@ -121,7 +120,7 @@ begin
                 end
             endcase
         end
-        if((&EECR[2:1]) )
+        if(&EECR[2:1])
         begin
             if(|eempe_timeout_cnt & ({EEARH, EEARL} > 2))
             begin

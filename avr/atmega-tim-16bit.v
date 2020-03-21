@@ -31,7 +31,7 @@
 `define PSRASY  1
 `define TSM     7
 
-//`define TCCR0A    ('h00)
+//`define TCCR0A ('h00)
 `define WGM00   0
 `define WGM01   1
 `define COM0C0  2
@@ -41,7 +41,7 @@
 `define COM0A0  6
 `define COM0A1  7
 
-//`define TCCR0B    ('h00)
+//`define TCCR0B ('h00)
 `define CS00    0
 `define CS01    1
 `define CS02    2
@@ -53,7 +53,7 @@
 //`define OCR0B ('h00)
 //`define OCR0C ('h00)
 
-//`define TIMSK0    ('h00)
+//`define TIMSK0 ('h00)
 `undef TOIE0
 `undef OCIE0A
 `undef OCIE0B
@@ -62,7 +62,6 @@
 `define OCIE0A  1
 `define OCIE0B  2
 `define OCIE0C  3
-
 
 module atmega_tim_16bit # (
     parameter PLATFORM = "XILINX",
@@ -105,7 +104,6 @@ module atmega_tim_16bit # (
     input ocrb_int_rst,
     output ocrc_int,
     input ocrc_int_rst,
-
     output reg oca,
     output reg ocb,
     output reg occ,
@@ -150,7 +148,7 @@ wire clk_active = |TCCRB[`CS02:`CS00];
 
 /* Sampling implementation */
 // Accourding to timer sampling module.
-/*always @*
+/*always @ *
 begin
     if(rst)
     begin
@@ -196,7 +194,7 @@ defparam
 
 reg updt_ocr_on_top;
 reg updt_ocr_on_bottom;
-always @*
+always @ *
 begin
     case({TCCRB[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]})
         4'd0, 4'd4, 4'd12: // Imediate.
@@ -218,7 +216,7 @@ begin
 end
 
 reg [15:0]top_value;
-always @*
+always @ *
 begin
     case({TCCRB[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]})
         4'd0: top_value = 16'hFFFF;
@@ -231,7 +229,7 @@ begin
 end
 
 reg [15:0]t_ovf_value;
-always @*
+always @ *
 begin
     case({TCCRB[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]})
         4'd5, 4'd6, 4'd7, 4'd14, 4'd15: t_ovf_value = top_value;
@@ -241,7 +239,7 @@ begin
 end
 
 // Read registers.
-always @*
+always @ *
 begin
     if(rst)
     begin

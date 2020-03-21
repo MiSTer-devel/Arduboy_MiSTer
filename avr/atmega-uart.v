@@ -20,7 +20,6 @@
 
 `timescale 1ns / 1ps
 
-
 // UCSRA
 `define RXC     7
 `define TXC     6
@@ -51,7 +50,6 @@
 // UCSRD
 `define CTSEN   1
 `define RTSEN   0
-
 
 module atmega_uart # (
     parameter PLATFORM = "XILINX",
@@ -84,7 +82,6 @@ module atmega_uart # (
     output reg tx,
     output tx_connect
     );
-
 
 reg [7:0]UDR_rx;
 reg [7:0]UDR_tx;

@@ -966,7 +966,7 @@ defparam
     LPM_MUX_component.lpm_widths = 4;
 
 reg [3:0]sel;
-always @*
+always @ *
 begin
     sel = 4'd0; // ram_bus_out
     case(data_addr)

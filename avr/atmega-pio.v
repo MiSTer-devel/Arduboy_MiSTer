@@ -81,7 +81,7 @@ begin
     end
 end
 
-always @*
+always @ *
 begin
     bus_dat_out = 8'h00;
     if(rd_dat & ~rst)

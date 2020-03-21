@@ -32,7 +32,7 @@
 `define PSRASY  1
 `define TSM     7
 
-//`define TCCR0A    ('h00)
+//`define TCCR0A ('h00)
 `define PWMA    1
 `define PWMB    0
 `define COM0B0  4
@@ -40,22 +40,21 @@
 `define COM0A0  6
 `define COM0A1  7
 
-
-//`define TCCR0B    ('h00)
+//`define TCCR0B ('h00)
 `define CS00    0
 `define CS01    1
 `define CS02    2
 `define CS03    3
 `define PWM4X   7
 
-//`define TCCR0C    ('h00)
+//`define TCCR0C ('h00)
 `define PWMD    0
 `undef COM0D0
 `undef COM0D1
 `define COM0D0  4
 `define COM0D1  5
 
-//`define TCCR0D    ('h00)
+//`define TCCR0D ('h00)
 `define WGM00   0
 `define WGM01   1
 //`define TCNT0 ('h00)
@@ -64,7 +63,7 @@
 //`define OCR0C ('h00)
 //`define OCR0D ('h00)
 
-//`define TIMSK0    ('h00)
+//`define TIMSK0 ('h00)
 `undef TOIE0
 `undef OCIE0A
 `undef OCIE0B
@@ -75,8 +74,6 @@
 `define OCIE0B  5
 `define OCIE0C  0
 `define OCIE0D  7
-
-
 
 module atmega_tim_10bit # (
     parameter PLATFORM = "XILINX",
@@ -178,7 +175,7 @@ wire clk_active = |TCCRB[`CS03:`CS00];
 /* Prescaller */
 reg [13:0]presc_cnt;
 
-always @(posedge rst or posedge clk_pll)
+always @ (posedge rst or posedge clk_pll)
 begin
     if(rst)
         presc_cnt <= 10'h000;

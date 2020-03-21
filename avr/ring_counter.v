@@ -48,13 +48,13 @@ endgenerate
 assign delay_line [0] = !delay_line [DELAY-1];
 
 // sync it over to the input clock
-always @(posedge clk) begin
+always @ (posedge clk) begin
   sync0 <= delay_line[0];
   wobble <= sync0;
 end
 
 // count when the wobbly oscillator is high
-always @(posedge clk or posedge rst) begin
+always @ (posedge clk or posedge rst) begin
   if (rst) cntr <= 0;
   else if (wobble) cntr <= cntr + 1;
 end
