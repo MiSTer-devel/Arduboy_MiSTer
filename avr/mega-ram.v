@@ -40,41 +40,37 @@
 
 generate
 
-if(PLATFORM == "XILINX")
-begin
+	if(PLATFORM == "XILINX") begin
+		reg [DATA_BUS_WIDTH - 1:0] mem [(2**ADDR_BUS_WIDTH)-1:0];
 
-reg [DATA_BUS_WIDTH - 1:0] mem [(2**ADDR_BUS_WIDTH)-1:0];
+		initial begin
+		if (RAM_PATH != "")
+			 $readmemh({RAM_PATH, ".mem"}, mem);
+		end
 
-initial begin
-if (RAM_PATH != "")
-    $readmemh({RAM_PATH, ".mem"}, mem);
-end
+		always @ (posedge clk) begin
+			reg old_rst = 0;
+			reg [7:0] clear_cnt = 0;
+			
+			old_rst <= rst;
+			if (~old_rst & rst) halt <= 1;
+			
+			if (halt) begin
+				mem[clear_cnt] <= 8'h00;
+				clear_cnt <= clear_cnt + 1'd1;
+				if(&clear_cnt) halt <= 0;
+			end
+			else if (cs & we) mem[a] <= d_in;
+		end
 
-integer clear_cnt;
-always @ (posedge clk) begin
-    if (rst) halt <= 1'b1;
-    if (halt) begin
-        for (clear_cnt = 0; clear_cnt < 256; clear_cnt = clear_cnt + 1)
-        begin : CLEAR_RAM
-            if (clear_cnt != 255) begin
-                mem[clear_cnt] <= 8'h00;
-            end
-            else if (clear_cnt == 255) begin
-                halt <= 1'b0;
-            end
-        end
-    end
-    else if (cs & we & (a < 12'hB00)) mem[a] <= d_in;
-end
+		reg [DATA_BUS_WIDTH - 1:0]d_out_tmp;
 
-reg [DATA_BUS_WIDTH - 1:0]d_out_tmp;
+		always @ (posedge clk) begin
+			d_out_tmp <= mem[a];
+		end
 
-always @ (posedge clk) begin
-    d_out_tmp <= mem[a];
-end
-assign d_out = (cs & re) ? d_out_tmp : 8'b00;
-
-end
-
+		assign d_out = (cs & re) ? d_out_tmp : 8'b00;
+	end
 endgenerate
+
 endmodule

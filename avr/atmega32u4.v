@@ -992,6 +992,8 @@ begin
 end
 /* !DATA BUS IN DEMULTIPLEXER */
 
+wire halt_ack;
+
 /* ATMEGA CORE */
 mega # (
     .PLATFORM(PLATFORM),
