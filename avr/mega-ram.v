@@ -21,56 +21,37 @@
 `timescale 1ns / 1ps
 
  module mega_ram  #(
-    parameter PLATFORM = "XILINX",
-    parameter MEM_MODE = "BLOCK",
     parameter ADDR_BUS_WIDTH = 12,  /* < in address lines */
     parameter DATA_BUS_WIDTH = 8,
     parameter RAM_PATH = ""
 ) (
-    input clk,
-    input cs,
-    input we,
-    input re,
-    input rst,
-    output reg halt,
-    input [ADDR_BUS_WIDTH-1:0] a,
-    input [DATA_BUS_WIDTH - 1:0] d_in,
-    output [DATA_BUS_WIDTH - 1:0] d_out
+    input      rst,
+    input      clk,
+    input      we,
+    input      [ADDR_BUS_WIDTH - 1:0] a,
+    input      [DATA_BUS_WIDTH - 1:0] d_in,
+    output reg [DATA_BUS_WIDTH - 1:0] d_out
 );
 
-generate
+reg [DATA_BUS_WIDTH - 1:0] mem [(2**ADDR_BUS_WIDTH)-1:0];
 
-	if(PLATFORM == "XILINX") begin
-		reg [DATA_BUS_WIDTH - 1:0] mem [(2**ADDR_BUS_WIDTH)-1:0];
+initial begin
+if (RAM_PATH != "")
+	 $readmemh({RAM_PATH, ".mem"}, mem);
+end
 
-		initial begin
-		if (RAM_PATH != "")
-			 $readmemh({RAM_PATH, ".mem"}, mem);
-		end
-
-		always @ (posedge clk) begin
-			reg old_rst = 0;
-			reg [7:0] clear_cnt = 0;
-			
-			old_rst <= rst;
-			if (~old_rst & rst) halt <= 1;
-			
-			if (halt) begin
-				mem[clear_cnt] <= 8'h00;
-				clear_cnt <= clear_cnt + 1'd1;
-				if(&clear_cnt) halt <= 0;
-			end
-			else if (cs & we) mem[a] <= d_in;
-		end
-
-		reg [DATA_BUS_WIDTH - 1:0]d_out_tmp;
-
-		always @ (posedge clk) begin
-			d_out_tmp <= mem[a];
-		end
-
-		assign d_out = (cs & re) ? d_out_tmp : 8'b00;
+always @ (posedge clk) begin
+	reg [7:0] clear_cnt = 0;
+	
+	if (rst) begin
+		mem[clear_cnt] <= 0;
+		clear_cnt <= clear_cnt + 1'd1;
 	end
-endgenerate
+	else if (we) begin
+		mem[a] <= d_in;
+	end
+end
+
+always @ (posedge clk) d_out <= mem[a];
 
 endmodule

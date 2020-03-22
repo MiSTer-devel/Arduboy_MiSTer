@@ -113,7 +113,7 @@ wire wdt_rst;
 wire [`BUS_ADDR_DATA_LEN-1:0]data_addr;
 wire [7:0]core_data_out;
 wire data_write;
-wire [7:0]core_data_in;
+reg  [7:0]core_data_in;
 wire data_read;
 /* !CORE WIRES */
 
@@ -509,7 +509,6 @@ atmega_spi_m # (
     .USE_RX("FALSE")
 )spi(
     .rst(rst),
-    .halt(halt_ack),
     .clk(clk),
     .addr_dat(data_addr[7:0]),
     .wr_dat(data_write & ~ram_sel),
@@ -616,7 +615,6 @@ atmega_tim_8bit # (
     .TIFR_ADDR('h35)
 )tim_0(
     .rst(rst),
-    .halt(halt_ack),
     .clk(clk),
     .clk8(clk8),
     .clk64(clk64),
@@ -831,7 +829,6 @@ atmega_tim_10bit # (
     .TIFR_ADDR('h39)
 )tim_4(
     .rst(rst),
-    .halt(halt_ack),
     .clk(clk),
     .clk_pll(tim_ck_out),
     .pll_enabled(pll_enabled),
@@ -913,20 +910,14 @@ endgenerate
 
 /* RAM */
 wire [7:0]ram_bus_out;
-wire halt;
 mega_ram  #(
-    .PLATFORM(PLATFORM),
-    .MEM_MODE("BLOCK"),
     .ADDR_BUS_WIDTH(`RAM_ADDR_WIDTH),
     .DATA_BUS_WIDTH(8),
     .RAM_PATH("")
 )ram(
-    .clk(core_clk),
-    .cs(ram_sel),
-    .re(data_read),
-    .we(data_write),
     .rst(rst),
-    .halt(halt),
+    .clk(core_clk),
+    .we(data_write & ram_sel),
     .a(data_addr[`RAM_ADDR_WIDTH-1:0]/* - `RESERVED_RAM_FOR_IO*/),
     .d_in(core_data_out),
     .d_out(ram_bus_out)
@@ -934,65 +925,41 @@ mega_ram  #(
 /* !RAM */
 
 /* DATA BUS IN DEMULTIPLEXER */
-wire [119:0]data_mux = {
-    dat_random_d_out,
-    dat_uart0_d_out,
-    dat_eeprom_d_out,
-    dat_pll_d_out,
-    dat_tim4_d_out,
-    dat_tim3_d_out,
-    dat_tim1_d_out,
-    dat_tim0_d_out,
-    dat_spi_d_out,
-    dat_pf_d_out,
-    dat_pe_d_out,
-    dat_pd_d_out,
-    dat_pc_d_out,
-    dat_pb_d_out,
-    ram_bus_out
-    };
-lpm_mux LPM_MUX_component (
-            .data(data_mux),
-            .sel(sel),
-            .result(core_data_in),
-            .aclr(),
-            .clken(),
-            .clock()
-            );
-defparam
-    LPM_MUX_component.lpm_size = 15,
-    LPM_MUX_component.lpm_type = "LPM_MUX",
-    LPM_MUX_component.lpm_width = 8,
-    LPM_MUX_component.lpm_widths = 4;
+always @ * begin
+    core_data_in = ram_bus_out;
+	 if(!data_addr[`BUS_ADDR_DATA_LEN-1:8]) begin
+		 case(data_addr[7:0])
+			  'h25, 'h24, 12'h23: core_data_in = dat_pb_d_out;
+			  'h28, 'h27, 12'h26: core_data_in = dat_pc_d_out;
+			  'h2b, 'h2a, 12'h29: core_data_in = dat_pd_d_out;
+			  'h2e, 'h2d, 12'h2c: core_data_in = dat_pe_d_out;
+			  'h31, 'h30, 12'h2f: core_data_in = dat_pf_d_out;
+			  'h4c, 'h4d, 12'h4e: core_data_in = dat_spi_d_out;
+			  'h44, 'h45, 12'h46,
+			  'h47, 'h48, 12'h6E,
+			  'h35:               core_data_in = dat_tim0_d_out;
+			  'h6F, 'h36:         core_data_in = dat_tim1_d_out;
+			  'h71, 'h38:         core_data_in = dat_tim3_d_out;
+			  'hc0, 'hc1, 12'hc2,
+			  'hc3, 'hc4, 12'hbe,
+			  'hbf, 'hcf, 12'hd0,
+			  'hd1, 'hd2, 12'h72,
+			  'h39:               core_data_in = dat_tim4_d_out;
+			  'h49, 'h52:         core_data_in = dat_pll_d_out;
+			  'h42, 'h41, 12'h40,
+			  'h3F:               core_data_in = dat_eeprom_d_out;
+			  'hce, 'hc8, 12'hc9,
+			  'hca, 'hcc, 12'hcd: core_data_in = dat_uart0_d_out;
+			  'h78, 'h79:         core_data_in = dat_random_d_out;
+		 endcase
+	 end
 
-reg [3:0]sel;
-always @ *
-begin
-    sel = 4'd0; // ram_bus_out
-    case(data_addr)
-        12'h025, 12'h024, 12'h023: sel = 4'd1; // dat_pb_d_out
-        12'h028, 12'h027, 12'h026: sel = 4'd2; // dat_pc_d_out
-        12'h02b, 12'h02a, 12'h029: sel = 4'd3; // dat_pd_d_out
-        12'h02e, 12'h02d, 12'h02c: sel = 4'd4; // dat_pe_d_out
-        12'h031, 12'h030, 12'h02f: sel = 4'd5; // dat_pf_d_out
-        12'h04c, 12'h04d, 12'h04e: sel = 4'd6; // dat_spi_d_out
-        12'h044, 12'h045, 12'h046, 12'h047, 12'h048, 12'h06E, 12'h035: sel = 4'd7; // dat_tim0_d_out
-        12'h06F, 12'h036: sel = 4'd8; // dat_tim1_d_out
-        12'h071, 12'h038: sel = 4'd9; // dat_tim3_d_out
-        12'h0c0, 12'h0c1, 12'h0c2, 12'h0c3, 12'h0c4, 12'h0be, 12'h0bf, 12'h0cf, 12'h0d0, 12'h0d1, 12'h0d2, 12'h072, 12'h039: sel = 4'd10; // dat_tim4_d_out
-        12'h049, 12'h052: sel = 4'd11; // dat_pll_d_out
-        12'h042, 12'h041, 12'h040, 12'h03F: sel = 4'd12; // dat_eeprom_d_out
-        12'h0ce, 12'h0c8, 12'h0c9, 12'h0ca, 12'h0cc, 12'h0cd: sel = 4'd13; // dat_uart0_d_out
-        12'h078, 12'h079: sel = 4'd14; // dat_random_d_out
-    endcase
     case(data_addr[`RAM_ADDR_WIDTH-1:4])
-        8'h08: sel = 4'd8; // dat_tim1_d_out
-        8'h09: sel = 4'd9; // dat_tim3_d_out
+        'h08: core_data_in = dat_tim1_d_out;
+        'h09: core_data_in = dat_tim3_d_out;
     endcase
 end
 /* !DATA BUS IN DEMULTIPLEXER */
-
-wire halt_ack;
 
 /* ATMEGA CORE */
 mega # (
@@ -1012,8 +979,8 @@ mega # (
     // Watchdog clock input that can be different from the core clock.
     .clk_wdt(core_clk),
     // Used to halt the core.
-    .halt(halt),
-    .halt_ack(halt_ack),
+    .halt(0),
+    .halt_ack(),
     // FLASH space data interface.
     .pgm_addr(pgm_addr),
     .pgm_data(pgm_data),
