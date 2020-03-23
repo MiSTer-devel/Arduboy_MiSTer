@@ -52,7 +52,6 @@
 `define RTSEN   0
 
 module atmega_uart # (
-    parameter PLATFORM = "XILINX",
     parameter BUS_ADDR_DATA_LEN = 8,
     parameter UDR_ADDR = 'hc1,
     parameter UCSRA_ADDR = 'hc8,

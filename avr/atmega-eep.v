@@ -21,7 +21,6 @@
 `timescale 1ns / 1ps
 
 module atmega_eep # (
-    parameter PLATFORM = "XILINX",
     parameter BUS_ADDR_DATA_LEN = 8,
     parameter EEARH_ADDR = 'h20,
     parameter EEARL_ADDR = 'h21,

@@ -59,7 +59,6 @@
 `define OCIE0B  2
 
 module atmega_tim_8bit # (
-    parameter PLATFORM = "XILINX",
     parameter USE_OCRB = "TRUE",
     parameter BUS_ADDR_DATA_LEN = 8,
     parameter GTCCR_ADDR = 'h43,

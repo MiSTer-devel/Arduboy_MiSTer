@@ -34,7 +34,6 @@
 `define ATMEGA_SPI_SPSR_SPI2X_bp        0
 
 module atmega_spi_m # (
-    parameter PLATFORM = "XILINX",
     parameter BUS_ADDR_DATA_LEN = 8,
     parameter SPCR_ADDR = 'h20,
     parameter SPSR_ADDR = 'h21,

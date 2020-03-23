@@ -76,7 +76,6 @@
 `define OCIE0D  7
 
 module atmega_tim_10bit # (
-    parameter PLATFORM = "XILINX",
     parameter USE_OCRA = "TRUE",
     parameter USE_OCRB = "TRUE",
     parameter USE_OCRD = "TRUE",

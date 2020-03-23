@@ -23,7 +23,6 @@
 `include "mega-def.v"
 
 module mega_alu # (
-    parameter PLATFORM = "XILINX",
     parameter CORE_TYPE = `MEGA_XMEGA_1
     )(
     input [15:0]inst,

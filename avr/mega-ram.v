@@ -37,19 +37,19 @@ reg [DATA_BUS_WIDTH - 1:0] mem [(2**ADDR_BUS_WIDTH)-1:0];
 
 initial begin
 if (RAM_PATH != "")
-	 $readmemh({RAM_PATH, ".mem"}, mem);
+     $readmemh({RAM_PATH, ".mem"}, mem);
 end
 
 always @ (posedge clk) begin
-	reg [7:0] clear_cnt = 0;
-	
-	if (rst) begin
-		mem[clear_cnt] <= 0;
-		clear_cnt <= clear_cnt + 1'd1;
-	end
-	else if (we) begin
-		mem[a] <= d_in;
-	end
+    reg [7:0] clear_cnt = 0;
+
+    if (rst) begin
+        mem[clear_cnt] <= 0;
+        clear_cnt <= clear_cnt + 1'd1;
+    end
+    else if (we) begin
+        mem[a] <= d_in;
+    end
 end
 
 always @ (posedge clk) d_out <= mem[a];

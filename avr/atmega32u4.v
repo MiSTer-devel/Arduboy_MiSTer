@@ -74,7 +74,6 @@ endmodule
 /* !TIMMERS PRESCALLERS MODULE */
 
 module atmega32u4 # (
-    parameter PLATFORM = "XILINX",
     parameter REGS_REGISTERED = "FALSE",
     parameter USE_HALT = "FALSE",
     parameter USE_PIO_B = "TRUE",
@@ -297,7 +296,6 @@ generate
 if (USE_PIO_B == "TRUE")
 begin: PORTB
 atmega_pio # (
-    .PLATFORM(PLATFORM),
     .BUS_ADDR_DATA_LEN(8),
     .PORT_WIDTH(8),
     .USE_CLEAR_SET("FALSE"),
@@ -337,7 +335,6 @@ generate
 if (USE_PIO_C == "TRUE")
 begin: PORTC
 atmega_pio # (
-    .PLATFORM(PLATFORM),
     .BUS_ADDR_DATA_LEN(8),
     .PORT_WIDTH(8),
     .USE_CLEAR_SET("FALSE"),
@@ -377,7 +374,6 @@ generate
 if (USE_PIO_D == "TRUE")
 begin: PORTD
 atmega_pio # (
-    .PLATFORM(PLATFORM),
     .BUS_ADDR_DATA_LEN(8),
     .PORT_WIDTH(8),
     .USE_CLEAR_SET("FALSE"),
@@ -417,7 +413,6 @@ generate
 if (USE_PIO_E == "TRUE")
 begin: PORTE
 atmega_pio # (
-    .PLATFORM(PLATFORM),
     .BUS_ADDR_DATA_LEN(8),
     .PORT_WIDTH(8),
     .USE_CLEAR_SET("FALSE"),
@@ -457,7 +452,6 @@ generate
 if (USE_PIO_F == "TRUE")
 begin: PORTF
 atmega_pio # (
-    .PLATFORM(PLATFORM),
     .BUS_ADDR_DATA_LEN(8),
     .PORT_WIDTH(8),
     .USE_CLEAR_SET("FALSE"),
@@ -497,7 +491,6 @@ generate
 if (USE_SPI_1 == "TRUE")
 begin: SPI_DISPLAY
 atmega_spi_m # (
-    .PLATFORM(PLATFORM),
     .BUS_ADDR_DATA_LEN(8),
     .SPCR_ADDR('h4c),
     .SPSR_ADDR('h4d),
@@ -540,7 +533,6 @@ generate
 if (USE_UART_1 == "TRUE")
 begin: UART1
 atmega_uart # (
-    .PLATFORM(PLATFORM),
     .BUS_ADDR_DATA_LEN(8),
     .UDR_ADDR('hce),
     .UCSRA_ADDR('hc8),
@@ -602,7 +594,6 @@ generate
 if (USE_TIMER_0 == "TRUE")
 begin:TIMER0
 atmega_tim_8bit # (
-    .PLATFORM(PLATFORM),
     .USE_OCRB("TRUE"),
     .BUS_ADDR_DATA_LEN(8),
     .GTCCR_ADDR('h43),
@@ -654,7 +645,6 @@ generate
 if (USE_TIMER_1 == "TRUE")
 begin: TIMER1
 atmega_tim_16bit # (
-    .PLATFORM(PLATFORM),
     .USE_OCRB("TRUE"),
     .USE_OCRC("TRUE"),
     .BUS_ADDR_DATA_LEN(8),
@@ -715,7 +705,6 @@ generate
 if (USE_TIMER_3 == "TRUE")
 begin: TIMER3
 atmega_tim_16bit # (
-    .PLATFORM(PLATFORM),
     .USE_OCRB("FALSE"),
     .USE_OCRC("FALSE"),
     .BUS_ADDR_DATA_LEN(8),
@@ -776,7 +765,6 @@ generate
 if(USE_PLL == "TRUE")
 begin: PLL
 atmega_pll # (
-    .PLATFORM(PLATFORM),
     .BUS_ADDR_DATA_LEN(8),
     .PLLCSR_ADDR('h49),
     .PLLFRQ_ADDR('h52),
@@ -809,7 +797,6 @@ generate
 if (USE_TIMER_4 == "TRUE")
 begin: TIMER4
 atmega_tim_10bit # (
-    .PLATFORM(PLATFORM),
     .USE_OCRA("TRUE"),
     .USE_OCRB("TRUE"),
     .USE_OCRD("TRUE"),
@@ -874,7 +861,6 @@ generate
 if (USE_EEPROM == "TRUE")
 begin: EEPROM
 atmega_eep # (
-    .PLATFORM(PLATFORM),
     .BUS_ADDR_DATA_LEN(8),
     .EEARH_ADDR('h42),
     .EEARL_ADDR('h41),
@@ -925,45 +911,44 @@ mega_ram  #(
 /* !RAM */
 
 /* DATA BUS IN DEMULTIPLEXER */
-always @ * begin
+always @ *
+begin
     core_data_in = ram_bus_out;
-	 if(!data_addr[`BUS_ADDR_DATA_LEN-1:8]) begin
-		 case(data_addr[7:0])
-			  'h25, 'h24, 12'h23: core_data_in = dat_pb_d_out;
-			  'h28, 'h27, 12'h26: core_data_in = dat_pc_d_out;
-			  'h2b, 'h2a, 12'h29: core_data_in = dat_pd_d_out;
-			  'h2e, 'h2d, 12'h2c: core_data_in = dat_pe_d_out;
-			  'h31, 'h30, 12'h2f: core_data_in = dat_pf_d_out;
-			  'h4c, 'h4d, 12'h4e: core_data_in = dat_spi_d_out;
-			  'h44, 'h45, 12'h46,
-			  'h47, 'h48, 12'h6E,
-			  'h35:               core_data_in = dat_tim0_d_out;
-			  'h6F, 'h36:         core_data_in = dat_tim1_d_out;
-			  'h71, 'h38:         core_data_in = dat_tim3_d_out;
-			  'hc0, 'hc1, 12'hc2,
-			  'hc3, 'hc4, 12'hbe,
-			  'hbf, 'hcf, 12'hd0,
-			  'hd1, 'hd2, 12'h72,
-			  'h39:               core_data_in = dat_tim4_d_out;
-			  'h49, 'h52:         core_data_in = dat_pll_d_out;
-			  'h42, 'h41, 12'h40,
-			  'h3F:               core_data_in = dat_eeprom_d_out;
-			  'hce, 'hc8, 12'hc9,
-			  'hca, 'hcc, 12'hcd: core_data_in = dat_uart0_d_out;
-			  'h78, 'h79:         core_data_in = dat_random_d_out;
-		 endcase
-	 end
-
-    case(data_addr[`RAM_ADDR_WIDTH-1:4])
-        'h08: core_data_in = dat_tim1_d_out;
-        'h09: core_data_in = dat_tim3_d_out;
-    endcase
+    if(~ram_sel) begin
+        case(data_addr[7:0])
+            'h25, 'h24, 'h23: core_data_in = dat_pb_d_out;
+            'h28, 'h27, 'h26: core_data_in = dat_pc_d_out;
+            'h2b, 'h2a, 'h29: core_data_in = dat_pd_d_out;
+            'h2e, 'h2d, 'h2c: core_data_in = dat_pe_d_out;
+            'h31, 'h30, 'h2f: core_data_in = dat_pf_d_out;
+            'h4c, 'h4d, 'h4e: core_data_in = dat_spi_d_out;
+            'h44, 'h45, 'h46,
+            'h47, 'h48, 'h6E,
+            'h35:             core_data_in = dat_tim0_d_out;
+            'h6F, 'h36:       core_data_in = dat_tim1_d_out;
+            'h71, 'h38:       core_data_in = dat_tim3_d_out;
+            'hc0, 'hc1, 'hc2,
+            'hc3, 'hc4, 'hbe,
+            'hbf, 'hcf, 'hd0,
+            'hd1, 'hd2, 'h72,
+            'h39:             core_data_in = dat_tim4_d_out;
+            'h49, 'h52:       core_data_in = dat_pll_d_out;
+            'h42, 'h41, 'h40,
+            'h3F:             core_data_in = dat_eeprom_d_out;
+            'hce, 'hc8, 'hc9,
+            'hca, 'hcc, 'hcd: core_data_in = dat_uart0_d_out;
+            'h78, 'h79:       core_data_in = dat_random_d_out;
+        endcase
+        case(data_addr[7:4])
+            'h8:              core_data_in = dat_tim1_d_out;
+            'h9:              core_data_in = dat_tim3_d_out;
+        endcase
+    end
 end
 /* !DATA BUS IN DEMULTIPLEXER */
 
 /* ATMEGA CORE */
 mega # (
-    .PLATFORM(PLATFORM),
     .CORE_TYPE(`CORE_TYPE),
     .ROM_ADDR_WIDTH(`ROM_ADDR_WIDTH),
     .RAM_ADDR_WIDTH(`BUS_ADDR_DATA_LEN),

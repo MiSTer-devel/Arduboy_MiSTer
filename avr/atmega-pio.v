@@ -18,14 +18,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-/************************************************************/
-/* Atention!  This file contain platform dependent modules. */
-/************************************************************/
-
 `timescale 1ns / 1ps
 
 module atmega_pio # (
-    parameter PLATFORM = "XILINX",
     parameter BUS_ADDR_DATA_LEN = 8,
     parameter PORT_WIDTH = 8,
     parameter USE_CLEAR_SET = "FALSE",

@@ -64,7 +64,6 @@
 `define OCIE0C  3
 
 module atmega_tim_16bit # (
-    parameter PLATFORM = "XILINX",
     parameter USE_OCRB = "TRUE",
     parameter USE_OCRC = "TRUE",
     parameter BUS_ADDR_DATA_LEN = 8,

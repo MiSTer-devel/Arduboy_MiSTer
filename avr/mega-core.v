@@ -149,7 +149,6 @@ endmodule
  */
 
 module mega #(
-	parameter PLATFORM = "XILINX",
 	parameter BOOT_ADDR = 0,
 	parameter USE_HALT = "FALSE",
 	parameter CORE_TYPE = `MEGA_XMEGA_1,
@@ -1196,7 +1195,6 @@ begin
 end
 
 mega_alu #(
-	.PLATFORM(PLATFORM),
 	.CORE_TYPE(CORE_TYPE)
 )mega_alu_inst(
 	.inst(pgm_data_registered),
@@ -1210,7 +1208,7 @@ mega_alu #(
 );
 
 mega_regs #(
-	.PLATFORM(PLATFORM),
+	.PLATFORM("XILINX"),
 	.REGISTERED(REGS_REGISTERED)
 )mega_regs_inst(
 	.rst(core_rst),

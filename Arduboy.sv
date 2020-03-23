@@ -111,15 +111,15 @@ pll pll
 // make reset at least 65K cycles long.
 reg reset = 1;
 always @(posedge clk_avr) begin
-	reg [15:0] reset_cnt = 0;
+    reg [15:0] reset_cnt = 0;
 
-	reset <= 0;
-	if(~&reset_cnt) begin
-		reset_cnt <= reset_cnt + 1'd1;
-		reset <= 1;
-	end
+    reset <= 0;
+    if(~&reset_cnt) begin
+        reset_cnt <= reset_cnt + 1'd1;
+        reset <= 1;
+    end
 
-	if(status[0] | buttons[1] | RESET | ioctl_download) reset_cnt <= 0;
+    if(status[0] | buttons[1] | RESET | ioctl_download) reset_cnt <= 0;
 end
 
 ///////////////////////////////////////////////////////
