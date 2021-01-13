@@ -20,74 +20,161 @@
 
 module emu
 (
-    //Master input clock
-    input         CLK_50M,
+	//Master input clock
+	input         CLK_50M,
 
-    //Async reset from top-level module.
-    //Can be used as initial reset.
-    input         RESET,
+	//Async reset from top-level module.
+	//Can be used as initial reset.
+	input         RESET,
 
-    //Must be passed to hps_io module
-    inout  [45:0] HPS_BUS,
+	//Must be passed to hps_io module
+	inout  [45:0] HPS_BUS,
 
-    //Base video clock. Usually equals to CLK_SYS.
-    output        VGA_CLK,
+	//Base video clock. Usually equals to CLK_SYS.
+	output        CLK_VIDEO,
 
-    //Multiple resolutions are supported using different VGA_CE rates.
-    //Must be based on CLK_VIDEO
-    output        VGA_CE,
+	//Multiple resolutions are supported using different CE_PIXEL rates.
+	//Must be based on CLK_VIDEO
+	output        CE_PIXEL,
 
-    output  [7:0] VGA_R,
-    output  [7:0] VGA_G,
-    output  [7:0] VGA_B,
-    output        VGA_HS,
-    output        VGA_VS,
-    output        VGA_DE, // = ~(VBlank | HBlank)
-    output        VGA_F1,
+	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
+	output [11:0] VIDEO_ARX,
+	output [11:0] VIDEO_ARY,
 
-    //Base video clock. Usually equals to CLK_SYS.
-    output        HDMI_CLK,
+	output  [7:0] VGA_R,
+	output  [7:0] VGA_G,
+	output  [7:0] VGA_B,
+	output        VGA_HS,
+	output        VGA_VS,
+	output        VGA_DE,    // = ~(VBlank | HBlank)
+	output        VGA_F1,
+	output [1:0]  VGA_SL,
+	output        VGA_SCALER, // Force VGA scaler
 
-    //Multiple resolutions are supported using different HDMI_CE rates.
-    //Must be based on CLK_VIDEO
-    output        HDMI_CE,
+`ifdef USE_FB
+	// Use framebuffer in DDRAM (USE_FB=1 in qsf)
+	// FB_FORMAT:
+	//    [2:0] : 011=8bpp(palette) 100=16bpp 101=24bpp 110=32bpp
+	//    [3]   : 0=16bits 565 1=16bits 1555
+	//    [4]   : 0=RGB  1=BGR (for 16/24/32 modes)
+	//
+	// FB_STRIDE either 0 (rounded to 256 bytes) or multiple of pixel size (in bytes)
+	output        FB_EN,
+	output  [4:0] FB_FORMAT,
+	output [11:0] FB_WIDTH,
+	output [11:0] FB_HEIGHT,
+	output [31:0] FB_BASE,
+	output [13:0] FB_STRIDE,
+	input         FB_VBL,
+	input         FB_LL,
+	output        FB_FORCE_BLANK,
 
-    output  [7:0] HDMI_R,
-    output  [7:0] HDMI_G,
-    output  [7:0] HDMI_B,
-    output        HDMI_HS,
-    output        HDMI_VS,
-    output        HDMI_DE, // = ~(VBlank | HBlank)
-    output  [1:0] HDMI_SL, // scanlines fx
+	// Palette control for 8bit modes.
+	// Ignored for other video modes.
+	output        FB_PAL_CLK,
+	output  [7:0] FB_PAL_ADDR,
+	output [23:0] FB_PAL_DOUT,
+	input  [23:0] FB_PAL_DIN,
+	output        FB_PAL_WR,
+`endif
 
-    //Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
-    output  [7:0] HDMI_ARX,
-    output  [7:0] HDMI_ARY,
+	output        LED_USER,  // 1 - ON, 0 - OFF.
 
-    output        LED_USER, // 1 - ON, 0 - OFF.
+	// b[1]: 0 - LED status is system status OR'd with b[0]
+	//       1 - LED status is controled solely by b[0]
+	// hint: supply 2'b00 to let the system control the LED.
+	output  [1:0] LED_POWER,
+	output  [1:0] LED_DISK,
 
-    // b[1]: 0 - LED status is system status OR'd with b[0]
-    //       1 - LED status is controled solely by b[0]
-    // hint: supply 2'b00 to let the system control the LED.
-    output  [1:0] LED_POWER,
-    output  [1:0] LED_DISK,
+	// I/O board button press simulation (active high)
+	// b[1]: user button
+	// b[0]: osd button
+	output  [1:0] BUTTONS,
 
-    output [15:0] AUDIO_L,
-    output [15:0] AUDIO_R,
-    output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
+	input         CLK_AUDIO, // 24.576 MHz
+	output [15:0] AUDIO_L,
+	output [15:0] AUDIO_R,
+	output        AUDIO_S,   // 1 - signed audio samples, 0 - unsigned
+	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
 
-    // Open-drain User port.
-    // 0 - D+/RX
-    // 1 - D-/TX
-    // 2..6 - USR2..USR6
-    // Set USER_OUT to 1 to read from USER_IN.
-    input   [6:0] USER_IN,
-    output  [6:0] USER_OUT
+	//ADC
+	inout   [3:0] ADC_BUS,
+
+	//SD-SPI
+	output        SD_SCK,
+	output        SD_MOSI,
+	input         SD_MISO,
+	output        SD_CS,
+	input         SD_CD,
+
+`ifdef USE_DDRAM
+	//High latency DDR3 RAM interface
+	//Use for non-critical time purposes
+	output        DDRAM_CLK,
+	input         DDRAM_BUSY,
+	output  [7:0] DDRAM_BURSTCNT,
+	output [28:0] DDRAM_ADDR,
+	input  [63:0] DDRAM_DOUT,
+	input         DDRAM_DOUT_READY,
+	output        DDRAM_RD,
+	output [63:0] DDRAM_DIN,
+	output  [7:0] DDRAM_BE,
+	output        DDRAM_WE,
+`endif
+
+`ifdef USE_SDRAM
+	//SDRAM interface with lower latency
+	output        SDRAM_CLK,
+	output        SDRAM_CKE,
+	output [12:0] SDRAM_A,
+	output  [1:0] SDRAM_BA,
+	inout  [15:0] SDRAM_DQ,
+	output        SDRAM_DQML,
+	output        SDRAM_DQMH,
+	output        SDRAM_nCS,
+	output        SDRAM_nCAS,
+	output        SDRAM_nRAS,
+	output        SDRAM_nWE,
+`endif
+
+`ifdef DUAL_SDRAM
+	//Secondary SDRAM
+	input         SDRAM2_EN,
+	output        SDRAM2_CLK,
+	output [12:0] SDRAM2_A,
+	output  [1:0] SDRAM2_BA,
+	inout  [15:0] SDRAM2_DQ,
+	output        SDRAM2_nCS,
+	output        SDRAM2_nCAS,
+	output        SDRAM2_nRAS,
+	output        SDRAM2_nWE,
+`endif
+
+	input         UART_CTS,
+	output        UART_RTS,
+	input         UART_RXD,
+	output        UART_TXD,
+	output        UART_DTR,
+	input         UART_DSR,
+
+	// Open-drain User port.
+	// 0 - D+/RX
+	// 1 - D-/TX
+	// 2..6 - USR2..USR6
+	// Set USER_OUT to 1 to read from USER_IN.
+	input   [6:0] USER_IN,
+	output  [6:0] USER_OUT,
+
+	input         OSD_STATUS
 );
 
-assign HDMI_ARX    = status[1] ? 8'd9  : 8'd16;
-assign HDMI_ARY    = status[1] ? 8'd16 : 8'd9;
+wire [1:0] ar = status[9:8];
+
+assign VIDEO_ARX = (!ar) ? (status[1] ? 8'd9  : 8'd16) : (ar - 1'd1);
+assign VIDEO_ARY = (!ar) ? (status[1] ? 8'd16 : 8'd9 ) : 12'd0;
+
 assign VGA_F1      = 0;
+assign VGA_SCALER  = 0;
 
 assign LED_POWER   = 0;
 assign LED_DISK[1] = 0;
@@ -132,6 +219,7 @@ localparam CONF_STR =
     "R0,Reset;",
     "-;",
     "O1,Orientation,Horizontal,Vertical;",
+    "O89,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
     "O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
     "OFG,ADC,Random,AnalogStick,Paddle;",
     "J1,A,B;",
@@ -253,17 +341,19 @@ vgaHdmi vgaHdmi
     .ce_pix(ce_pix)
 );
 
-arcade_video #(256,144,6) arcade_video
+arcade_video #(256,6) arcade_video
 (
     .*,
     .clk_video(clk_sys),
     .RGB_in({6{pixelValue}}),
-
-    .forced_scandoubler(0),
     .gamma_bus(),
-    .no_rotate(~status[1]),
-    .rotate_ccw(1),
     .fx(status[5:3])
 );
+
+assign {FB_PAL_CLK, FB_FORCE_BLANK, FB_PAL_ADDR, FB_PAL_DOUT, FB_PAL_WR} = '0;
+
+wire no_rotate = ~status[1];
+wire rotate_ccw = 1;
+screen_rotate screen_rotate (.*);
 
 endmodule
