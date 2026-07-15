@@ -217,10 +217,16 @@ always @(posedge clk_avr) begin
         reset <= 1;
     end
 
-    if(status[0] | buttons[1] | RESET | ioctl_download) reset_cnt <= 0;
+    if(status[0] | buttons[1] | RESET | cart_download) reset_cnt <= 0;
 end
 
 ///////////////////////////////////////////////////////
+
+// Status Bit Map: (0..31 => "O", 32..63 => "o")
+// 0         1         2         3          4         5         6
+// 01234567890123456789012345678901 23456789012345678901234567890123
+// 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
+// XXXXXX  XX     XX
 
 `include "build_id.v"
 localparam CONF_STR =
@@ -233,6 +239,8 @@ localparam CONF_STR =
     "O89,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
     "O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
     "OFG,ADC,Random,AnalogStick,Paddle;",
+    "O2,Custom Palette,Off,On;",
+    "D0FC1,GBP,Load Palette;",
     "J1,A,B;",
     "V,v",`BUILD_DATE
 };
@@ -251,6 +259,11 @@ wire [14:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 wire  [7:0] ioctl_index;
 
+// ioctl_index[5:0] tells files apart: game ROM (F0) = 0, palette (FC1) = 1.
+// ioctl_index[7:6] is the extension index within "BINHEX" (0 = BIN, 1 = HEX).
+wire cart_download    = (ioctl_index[5:0] == 0) && ioctl_download;
+wire palette_download = (ioctl_index[5:0] == 1) && ioctl_download;
+
 hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
     .clk_sys(clk_sys),
@@ -261,6 +274,7 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
     .paddle_0(paddle),
 
     .status(status),
+    .status_menumask(~status[2]),
     .buttons(buttons),
 
     .forced_scandoubler(forced_scandoubler),
@@ -287,7 +301,7 @@ always @ (posedge clk_sys) begin
     reg [15:0] addr;
     reg  [3:0] code;
 
-    if (ioctl_wr) begin
+    if (ioctl_wr && cart_download) begin
         if(!ioctl_index) rom[ioctl_addr[14:1]][ioctl_addr[0]] <= ioctl_dout;
         else begin
             if(state) state <= state + 1'd1;
@@ -356,11 +370,20 @@ vgaHdmi vgaHdmi
     .ce_pix(ce_pix)
 );
 
-arcade_video #(256,6) arcade_video
+// Kitrinx .gbp palette: file bytes shift in MSB-first.
+// FG color = bytes 0-2, BG color = bytes 9-11 (same layout as AdventureVision core).
+reg [127:0] palette = 128'hFFFFFF00000000000000000000000000; // default: stock white-on-black
+
+always @ (posedge clk_sys) if (palette_download & ioctl_wr) palette <= {palette[119:0], ioctl_dout};
+
+wire [23:0] color_fg = palette[127:104];
+wire [23:0] color_bg = palette[55:32];
+
+arcade_video #(256,24) arcade_video
 (
     .*,
     .clk_video(clk_sys),
-    .RGB_in({6{pixelValue}}),
+    .RGB_in(status[2] ? (pixelValue ? color_fg : color_bg) : {24{pixelValue}}),
     .gamma_bus(),
     .fx(status[5:3])
 );
