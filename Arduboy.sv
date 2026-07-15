@@ -233,14 +233,16 @@ localparam CONF_STR =
 {
     "Arduboy;;",
     "F0,BINHEX;",
-    "R0,Reset;",
     "-;",
     "O1,Orientation,Horizontal,Vertical;",
     "O89,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
     "O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
     "OFG,ADC,Random,AnalogStick,Paddle;",
+    "-;",
     "O2,Custom Palette,Off,On;",
     "D0FC1,GBP,Load Palette;",
+    "-;",
+    "R0,Reset;",
     "J1,A,B;",
     "V,v",`BUILD_DATE
 };
