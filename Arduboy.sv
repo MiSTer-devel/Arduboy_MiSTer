@@ -226,7 +226,7 @@ end
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXX  XX     XX
+// XXXXXXX XX     XX
 
 `include "build_id.v"
 localparam CONF_STR =
@@ -241,6 +241,7 @@ localparam CONF_STR =
     "-;",
     "O2,Custom Palette,Off,On;",
     "D0FC1,GBP,Load Palette;",
+    "D0O6,Palette Colors,Normal,Swapped;",
     "-;",
     "R0,Reset;",
     "J1,A,B;",
@@ -378,8 +379,8 @@ reg [127:0] palette = 128'hFFFFFF00000000000000000000000000; // default: stock w
 
 always @ (posedge clk_sys) if (palette_download & ioctl_wr) palette <= {palette[119:0], ioctl_dout};
 
-wire [23:0] color_fg = palette[127:104];
-wire [23:0] color_bg = palette[55:32];
+wire [23:0] color_fg = status[6] ? palette[55:32]   : palette[127:104];
+wire [23:0] color_bg = status[6] ? palette[127:104] : palette[55:32];
 
 arcade_video #(256,24) arcade_video
 (
