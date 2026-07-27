@@ -230,7 +230,7 @@ begin
         begin
             R[7:0] = 8'h00 - rd[7:0];
             sreg_out[`XMEGA_FLAG_C] = |R[7:0];
-            sreg_out[`XMEGA_FLAG_H] = R[3] | ~rd[3];
+            sreg_out[`XMEGA_FLAG_H] = R[3] | rd[3];
             sreg_out[`XMEGA_FLAG_V] = &{R[7], ~R[6:0]};
             sreg_out[`XMEGA_FLAG_N] = R[7];
             sreg_out[`XMEGA_FLAG_S] = sreg_out[`XMEGA_FLAG_N] ^ sreg_out[`XMEGA_FLAG_V];
