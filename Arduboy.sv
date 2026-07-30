@@ -361,6 +361,7 @@ wire VSync, HSync, HBlank, VBlank;
 vgaHdmi vgaHdmi
 (
     .clock(clk_sys),
+    .clk_avr(clk_avr),
     .reset(reset),
     .oled_dc(oled_dc),
     .oled_clk(oled_clk),
