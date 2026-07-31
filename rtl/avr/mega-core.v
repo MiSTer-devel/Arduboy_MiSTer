@@ -272,6 +272,7 @@ begin
 	pgm_data_int = pgm_data;
 	int_registered = 1'b0;
 	int_rst = 1'b0;
+	PC_SNAPSHOOT = PC;
 	if(VECTOR_INT_TABLE_SIZE != 0)
 	begin
 		if(&{~skip_next_clock, ~cnt_rst, (USE_HALT != "TRUE" | ~halt_int | state_cnt != `STEP0)})
@@ -281,11 +282,9 @@ begin
 				begin
 					//if(~|last_state)
 					//begin
-					current_int_vect_registered = current_int_vect_request;
 					pgm_data_int = 16'b1001010000001110;
 					int_registered = 1'b1;
 					int_rst = 1'b1 << (current_int_vect_request - 1);
-					PC_SNAPSHOOT = PC;
 					//end
 				end
 				{3'b111, `STEP1}: 
@@ -294,6 +293,19 @@ begin
 					int_registered = 1'b1;
 				end
 			endcase
+		end
+	end
+end
+
+// current_int_vect_registered is read a cycle later than PC_SNAPSHOOT, so it needs a real register.
+always @ (posedge clk)
+begin
+	if(VECTOR_INT_TABLE_SIZE != 0)
+	begin
+		if(&{~skip_next_clock, ~cnt_rst, (USE_HALT != "TRUE" | ~halt_int | state_cnt != `STEP0)})
+		begin
+			if({unlock_int_registered_step_2, int_request, sreg_out[`XMEGA_FLAG_I], state_cnt} == {3'b011, `STEP0})
+				current_int_vect_registered <= current_int_vect_request;
 		end
 	end
 end
