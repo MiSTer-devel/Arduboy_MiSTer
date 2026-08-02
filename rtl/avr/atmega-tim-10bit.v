@@ -185,6 +185,7 @@ end
 
 /* Prescaller selection implementation */
 wire [15:0]tim_clks = {presc_cnt, clk_pll, 1'b0};
+wire timer_clk = pll_enabled ? clk_pll : clk;
 always @ *
 begin
     clk_int = tim_clks[TCCRB[`CS03:`CS00]];
@@ -272,7 +273,7 @@ begin
 end
 
 /* Set "oc" pin on specified conditions*/
-always @ (posedge rst or posedge pll_enabled ? clk_pll : clk)
+always @ (posedge rst or posedge timer_clk)
 begin
     if(rst)
     begin
