@@ -49,8 +49,14 @@ module atmega_eep # (
     );
 
 // EEPROM_SYS_FLAGS_SHOW_LOGO_LEDS / EEPROM_AUDIO_ON
-(* ram_init_file = "EEPROM.mif" *)
 reg [7:0]eep[EEP_SIZE-1 : 0];
+
+// Real ATmega32U4 EEPROM reads 0xFF when erased; Arduboy2 depends on that
+// for its boot-logo and audio-on defaults (eepromSysFlags/eepromAudioOnOff).
+integer eep_init_i;
+initial
+    for(eep_init_i = 0; eep_init_i < EEP_SIZE; eep_init_i = eep_init_i + 1)
+        eep[eep_init_i] = 8'hFF;
 
 reg [7:0]EEARH;
 reg [7:0]EEARL;
