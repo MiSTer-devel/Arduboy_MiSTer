@@ -142,8 +142,6 @@ wire tim4_ocap_io_connect;
 wire tim4_ocan_io_connect;
 wire tim4_ocbp_io_connect;
 wire tim4_ocbn_io_connect;
-wire tim4_occp_io_connect;
-wire tim4_occn_io_connect;
 wire tim4_ocdp_io_connect;
 wire tim4_ocdn_io_connect;
 wire uart_tx_io_connect;
@@ -162,7 +160,6 @@ wire tim3_ocb;
 wire tim3_occ;
 wire tim4_oca;
 wire tim4_ocb;
-wire tim4_occ;
 wire tim4_ocd;
 wire spi_miso;
 wire usb_ck_out;
@@ -830,20 +827,15 @@ atmega_tim_10bit # (
     .ocra_int_rst(int_timer4_compa_rst),
     .ocrb_int(int_timer4_compb),
     .ocrb_int_rst(int_timer4_compb_rst),
-    .ocrc_int(),
-    .ocrc_int_rst(),
     .ocrd_int(int_timer4_compd),
     .ocrd_int_rst(int_timer4_compd_rst),
     .oca(tim4_oca),
     .ocb(tim4_ocb),
-    .occ(tim4_occ),
     .ocd(tim4_ocd),
     .ocap_io_connect(tim4_ocap_io_connect),
     .ocan_io_connect(tim4_ocan_io_connect),
     .ocbp_io_connect(tim4_ocbp_io_connect),
     .ocbn_io_connect(tim4_ocbn_io_connect),
-    .occp_io_connect(tim4_occp_io_connect),
-    .occn_io_connect(tim4_occn_io_connect),
     .ocdp_io_connect(tim4_ocdp_io_connect),
     .ocdn_io_connect(tim4_ocdn_io_connect)
     );
