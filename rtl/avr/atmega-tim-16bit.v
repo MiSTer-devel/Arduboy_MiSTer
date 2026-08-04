@@ -143,6 +143,14 @@ reg clk_int_del;
 
 reg up_count;
 
+// up_count only applies to genuine up/down-counting modes; every other mode is monotonic on
+// real hardware. effective_up_count forces "always counting up" outside is_updown_mode.
+wire [3:0] wgm_mode = {TCCRB[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]};
+wire is_updown_mode = (wgm_mode == 4'd1) || (wgm_mode == 4'd2) || (wgm_mode == 4'd3) ||
+                       (wgm_mode == 4'd8) || (wgm_mode == 4'd9) || (wgm_mode == 4'd10) ||
+                       (wgm_mode == 4'd11);
+wire effective_up_count = is_updown_mode ? up_count : 1'b1;
+
 wire clk_active = |TCCRB[`CS02:`CS00];
 
 /* Sampling implementation */
@@ -393,11 +401,11 @@ begin
         clk_int_del <= clk_int; // Shift prescaller clock to a delay register every IO core positive edge clock to detect prescaller positive edges.
         if((~clk_int_del & clk_int) || TCCRB[`CS02:`CS00] == 3'b001) // if prescaller clock = IO core clock disable prescaller positive edge detector.
         begin
-            if(up_count && (TCNT < top_value))
+            if(effective_up_count && (TCNT < top_value))
             begin
                 TCNT <= TCNT + 1'b1;
             end
-            else if(!up_count && (TCNT > 16'h0000))
+            else if(!effective_up_count && (TCNT > 16'h0000))
             begin
                 TCNT <= TCNT - 1'b1;
             end
@@ -417,7 +425,7 @@ begin
                             16'hFFFF: oca <= 1'b1;
                             default:
                             begin
-                                if(up_count)
+                                if(effective_up_count)
                                 begin
                                     case(TCCRA[`COM0A1:`COM0A0])
                                         2'h1: oca <= ~oca;
@@ -465,7 +473,7 @@ begin
                                 16'hFFFF: ocb <= 1'b1;
                                 default:
                                 begin
-                                    if(up_count)
+                                    if(effective_up_count)
                                     begin
                                         case(TCCRA[`COM0B1:`COM0B0])
                                             2'h1: ocb <= ~ocb;
@@ -513,7 +521,7 @@ begin
                                 16'hFFFF: occ <= 1'b1;
                                 default:
                                 begin
-                                    if(up_count)
+                                    if(effective_up_count)
                                     begin
                                         case(TCCRA[`COM0C1:`COM0C0])
                                             2'h1: occ <= ~occ;
