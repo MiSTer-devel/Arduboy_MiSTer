@@ -513,7 +513,10 @@ begin
 					end
 					{1'b1, `STEP1, `INSTRUCTION_STS}:
 					begin
-						case(data_addr_int)
+						// Real "STS 0x5F, Rr" (direct write to SREG). Uses the freshly-decoded
+						// address, not the registered data_addr_int (not updated until this
+						// same STEP1 -- see the data_addr_int-setting casex further down).
+						case(ROM_ADDR_WIDTH > 16 ? {RAMPD, pgm_data_int} : pgm_data_int)
 							24'h05F: SREG <= reg_rs1;
 						endcase
 					end
