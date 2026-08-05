@@ -675,7 +675,12 @@ assign ocra_int = TIFR[`OCF0A];
 assign ocrb_int = TIFR[`OCF0B];
 assign ocrc_int = TIFR[`OCF0C];
 
-assign oca_io_connect = (TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : (TCCRA[`COM0A1:`COM0A0] == 2'b01 ? (({TCCRA[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]} == 4'd14 || {TCCRA[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]} == 4'd15) ? 1'b1 : 1'b0) : 1'b1);
+// COM=01 connects OCA to the pin only for these WGM modes (ATmega32U4 datasheet Tables 14-1/14-2/14-3).
+wire [3:0] wgm_value = {TCCRB[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]};
+assign oca_io_connect = (TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : (TCCRA[`COM0A1:`COM0A0] == 2'b01 ?
+    ((wgm_value == 4'd0)  || (wgm_value == 4'd4)  || (wgm_value == 4'd8)  ||
+     (wgm_value == 4'd9)  || (wgm_value == 4'd10) || (wgm_value == 4'd11) ||
+     (wgm_value == 4'd12) || (wgm_value == 4'd14) || (wgm_value == 4'd15) ? 1'b1 : 1'b0) : 1'b1);
 assign ocb_io_connect = (TCCRA[`COM0B1:`COM0B0] == 2'b00 || TCCRA[`COM0B1:`COM0B0] == 2'b01) ? 1'b0 : 1'b1;
 assign occ_io_connect = (TCCRA[`COM0C1:`COM0C0] == 2'b00 || TCCRA[`COM0C1:`COM0C0] == 2'b01) ? 1'b0 : 1'b1;
 
