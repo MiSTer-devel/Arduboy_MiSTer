@@ -336,12 +336,7 @@ end
 wire Buzzer1, Buzzer2;
 wire oled_dc, oled_clk, oled_data;
 
-// Reconstructs the pre-rename 3-bit RGB output exactly, bit for bit (RGB[2]=PB6, RGB[1]=PB7,
-// RGB[0]=PB5 inside atmega32u4.v) so the {LED_USER, LED_DISK[0]} width mismatch below resolves
-// identically to the pre-rename connection instead of being re-guessed.
-wire [2:0] avr_rgb_out;
-
-atmega32u4 atmega32u4
+arduboy_board arduboy_board
 (
     .clk(clk_avr),
     .rst(reset),
@@ -350,19 +345,15 @@ atmega32u4 atmega32u4
     .buttons(~(status[1] ? {joystick[5:4], joystick[1], joystick[0], joystick[2], joystick[3]} : joystick[5:0])),
     .joystick_analog(status[16] ? {~paddle[7],paddle[6:0]} : joystick_analog[7:0]),
     .status(|status[16:15]),
-    .PB6(avr_rgb_out[2]),
-    .PB7(avr_rgb_out[1]),
-    .PB5(avr_rgb_out[0]),
-    .PC6(Buzzer1),
-    .PC7(Buzzer2),
-    .PD4(oled_dc),
-    .PB1(oled_clk),
-    .PB2(oled_data),
-    .PD2(USER_IN[0]),
-    .PD3(USER_OUT[1])
+    .RGB({LED_USER, LED_DISK[0]}),
+    .Buzzer1(Buzzer1),
+    .Buzzer2(Buzzer2),
+    .DC(oled_dc),
+    .spi_scl(oled_clk),
+    .spi_mosi(oled_data),
+    .uart_rx(USER_IN[0]),
+    .uart_tx(USER_OUT[1])
 );
-
-assign {LED_USER, LED_DISK[0]} = avr_rgb_out;
 
 wire pixelValue, ce_pix;
 wire VSync, HSync, HBlank, VBlank;

@@ -96,9 +96,9 @@ module atmega32u4 # (
     input clk_pll,
     output [`ROM_ADDR_WIDTH-1:0] pgm_addr,
     input [15:0] pgm_data,
-    input [5:0] buttons,
     input [7:0] joystick_analog,
     input status,
+    input PF4, PF5, PF6, PF7, PE6, PB4,
     output PB5, PB6, PB7,
     output PC6, PC7,
     output PD4,
@@ -168,12 +168,12 @@ wire usb_ck_out;
 wire tim_ck_out;
 /* !IO ALTERNATIVE FUNCTION */
 
-assign pf_in[6] = buttons[0]; // BUTTON RIGHT
-assign pf_in[5] = buttons[1]; // BUTTON LEFT
-assign pf_in[4] = buttons[2]; // BUTTON DOWN
-assign pf_in[7] = buttons[3]; // BUTTON UP
-assign pe_in[6] = buttons[4]; // BUTTON A
-assign pb_in[4] = buttons[5]; // BUTTON B
+assign pf_in[6] = PF6;
+assign pf_in[5] = PF5;
+assign pf_in[4] = PF4;
+assign pf_in[7] = PF7;
+assign pe_in[6] = PE6;
+assign pb_in[4] = PB4;
 
 // RGB LED is common anode (ie. HIGH = OFF)
 assign PB6 = tim1_ocb_io_connect ? tim1_ocb : ~(pb_out[6]);
