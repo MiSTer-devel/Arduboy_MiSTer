@@ -99,10 +99,12 @@ module atmega32u4 # (
     input [5:0] buttons,
     input [7:0] joystick_analog,
     input status,
-    output [2:0] RGB,
-    output Buzzer1, Buzzer2, DC, spi_scl, spi_mosi,
-    input uart_rx,
-    output uart_tx
+    output PB5, PB6, PB7,
+    output PC6, PC7,
+    output PD4,
+    output PB1, PB2,
+    input PD2,
+    output PD3
     );
 
 wire core_clk = clk;
@@ -174,14 +176,14 @@ assign pe_in[6] = buttons[4]; // BUTTON A
 assign pb_in[4] = buttons[5]; // BUTTON B
 
 // RGB LED is common anode (ie. HIGH = OFF)
-assign RGB[2] = tim1_ocb_io_connect ? tim1_ocb : ~(pb_out[6]);
-assign RGB[1] = tim0_oca_io_connect ? ~tim0_oca : ~(pb_out[7]);
-assign RGB[0] = tim1_oca_io_connect ? tim1_oca : ~(pb_out[5]);
+assign PB6 = tim1_ocb_io_connect ? tim1_ocb : ~(pb_out[6]);
+assign PB7 = tim0_oca_io_connect ? ~tim0_oca : ~(pb_out[7]);
+assign PB5 = tim1_oca_io_connect ? tim1_oca : ~(pb_out[5]);
 
 // Fall through to GPIO when the timer output is disconnected, same as the RGB LED pins above.
-assign Buzzer1 = tim3_oca_io_connect ? tim3_oca : pc_out[6];
-assign Buzzer2 = tim4_ocap_io_connect ? tim4_oca : pc_out[7];
-assign DC = pd_out[4];
+assign PC6 = tim3_oca_io_connect ? tim3_oca : pc_out[6];
+assign PC7 = tim4_ocap_io_connect ? tim4_oca : pc_out[7];
+assign PD4 = pd_out[4];
 
 /* Interrupt wires */
 wire ram_sel = |data_addr[`BUS_ADDR_DATA_LEN-1:8];
@@ -511,9 +513,9 @@ atmega_spi_m # (
     .io_connect(spi_io_connect),
     .io_conn_slave(io_conn_slave),
 
-    .scl(spi_scl),
+    .scl(PB1),
     .miso(spi_miso),
-    .mosi(spi_mosi)
+    .mosi(PB2)
     );
 end
 else
@@ -555,8 +557,8 @@ atmega_uart # (
     .udre_int(int_usart1_udre),
     .udre_int_rst(int_usart1_udre_rst),
 
-    .rx(uart_rx),
-    .tx(uart_tx),
+    .rx(PD2),
+    .tx(PD3),
     .tx_connect(uart_tx_io_connect)
     );
 end
