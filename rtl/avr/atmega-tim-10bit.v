@@ -395,16 +395,8 @@ begin
                             endcase
                         end
                     endcase
-                    if(TIMSK[`OCIE0A])
-                    begin
-                        if(ocra_p == ocra_n && clk_active == 1'b1)
-                            ocra_p <= ~ocra_p;
-                    end
-                    else
-                    begin
-                        ocra_p <= 1'b0;
-                        ocra_n <= 1'b0;
-                    end
+                    if(ocra_p == ocra_n && clk_active == 1'b1)
+                        ocra_p <= ~ocra_p;
                 end
                 else if(TCCRD[`WGM00] & TCCRA[`PWMA] & {TCH, TCNTL} == 10'h000)
                     oca <= 1'b0;
@@ -458,16 +450,8 @@ begin
                             endcase
                         end
                     endcase
-                    if(TIMSK[`OCIE0B])
-                    begin
-                        if(ocrb_p == ocrb_n && clk_active == 1'b1)
-                            ocrb_p <= ~ocrb_p;
-                    end
-                    else
-                    begin
-                        ocrb_p <= 1'b0;
-                        ocrb_n <= 1'b0;
-                    end
+                    if(ocrb_p == ocrb_n && clk_active == 1'b1)
+                        ocrb_p <= ~ocrb_p;
                 end
                 else if(TCCRD[`WGM00] & TCCRA[`PWMB] & {TCH, TCNTL} == 10'h000)
                     oca <= 1'b0;
@@ -525,16 +509,8 @@ begin
                             endcase
                         end
                     endcase
-                    if(TIMSK[`OCIE0D])
-                    begin
-                        if(ocrd_p == ocrd_n && clk_active == 1'b1)
-                            ocrd_p <= ~ocrd_p;
-                    end
-                    else
-                    begin
-                        ocrd_p <= 1'b0;
-                        ocrd_n <= 1'b0;
-                    end
+                    if(ocrd_p == ocrd_n && clk_active == 1'b1)
+                        ocrd_p <= ~ocrd_p;
                 end
                 else if(TCCRD[`WGM00] & TCCRA[`PWMD] & {TCH, TCNTL} == 10'h000)
                     oca <= 1'b0;
@@ -542,16 +518,8 @@ begin
             // TCNT overflow logick.
             if(&{{TCH, TCNTL} == t_ovf_value, ~halt})
             begin
-                if(TIMSK[`TOIE0])
-                begin
-                    if(tov_p == tov_n && clk_active == 1'b1)
-                        tov_p <= ~tov_p;
-                end
-                else
-                begin
-                    tov_p <= 1'b0;
-                    tov_n <= 1'b0;
-                end
+                if(tov_p == tov_n && clk_active == 1'b1)
+                    tov_p <= ~tov_p;
             end
             if(&{{TCH, TCNTL} == top_value, ~halt})
             begin
@@ -620,10 +588,10 @@ begin
     end
 end
 
-assign tov_int = TIFR[`TOV0];
-assign ocra_int = TIFR[`OCF0A];
-assign ocrb_int = TIFR[`OCF0B];
-assign ocrd_int = TIFR[`OCF0D];
+assign tov_int = TIFR[`TOV0] & TIMSK[`TOIE0];
+assign ocra_int = TIFR[`OCF0A] & TIMSK[`OCIE0A];
+assign ocrb_int = TIFR[`OCF0B] & TIMSK[`OCIE0B];
+assign ocrd_int = TIFR[`OCF0D] & TIMSK[`OCIE0D];
 
 assign ocap_io_connect = USE_OCRA == "TRUE" ? ((TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
 assign ocan_io_connect = USE_OCRA == "TRUE" ? ((TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
