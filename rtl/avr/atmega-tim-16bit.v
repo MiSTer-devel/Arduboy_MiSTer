@@ -608,7 +608,7 @@ begin
                 begin
                     TCCRC <= bus_dat_in;
                 end
-/*              TCNTL_ADDR:
+                TCNTL_ADDR:
                 begin
                     TCNT <= (TMP_REG_addr == TCNTH_ADDR) ? {TMP_REG_wr, bus_dat_in} : {8'd0, bus_dat_in};
                 end
@@ -616,7 +616,7 @@ begin
                 begin
                     TMP_REG_wr <= bus_dat_in;
                     TMP_REG_addr <= TCNTH_ADDR;
-                end */
+                end
                 ICRL_ADDR:
                 begin
                     ICR <= (TMP_REG_addr == ICRH_ADDR) ? {TMP_REG_wr, bus_dat_in} : {8'd0, bus_dat_in};
@@ -643,8 +643,10 @@ begin
                 OCRBH_ADDR:
                 begin
                     if(USE_OCRB == "TRUE")
+                    begin
                         TMP_REG_wr <= bus_dat_in;
                         TMP_REG_addr <= OCRBH_ADDR;
+                    end
                 end
                 OCRCL_ADDR:
                 begin
@@ -654,13 +656,15 @@ begin
                 OCRCH_ADDR:
                 begin
                     if(USE_OCRC == "TRUE")
+                    begin
                         TMP_REG_wr <= bus_dat_in;
                         TMP_REG_addr <= OCRCH_ADDR;
+                    end
                 end
-/*              TIFR_ADDR:
+                TIFR_ADDR:
                 begin
                     TIFR <= TIFR & ~bus_dat_in;
-                end */
+                end
                 TIMSK_ADDR:
                 begin
                     TIMSK <= bus_dat_in;
