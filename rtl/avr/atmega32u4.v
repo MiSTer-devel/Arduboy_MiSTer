@@ -178,8 +178,9 @@ assign RGB[2] = tim1_ocb_io_connect ? tim1_ocb : ~(pb_out[6]);
 assign RGB[1] = tim0_oca_io_connect ? ~tim0_oca : ~(pb_out[7]);
 assign RGB[0] = tim1_oca_io_connect ? tim1_oca : ~(pb_out[5]);
 
-assign Buzzer1 = pc_out[6];
-assign Buzzer2 = tim4_ocap_io_connect ? tim4_oca : 1'b0;
+// Fall through to GPIO when the timer output is disconnected, same as the RGB LED pins above.
+assign Buzzer1 = tim3_oca_io_connect ? tim3_oca : pc_out[6];
+assign Buzzer2 = tim4_ocap_io_connect ? tim4_oca : pc_out[7];
 assign DC = pd_out[4];
 
 /* Interrupt wires */
