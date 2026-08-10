@@ -143,6 +143,14 @@ reg clk_int_del;
 
 reg up_count;
 
+// up_count only applies to genuine up/down-counting modes; every other mode is monotonic on
+// real hardware. effective_up_count forces "always counting up" outside is_updown_mode.
+wire [3:0] wgm_mode = {TCCRB[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]};
+wire is_updown_mode = (wgm_mode == 4'd1) || (wgm_mode == 4'd2) || (wgm_mode == 4'd3) ||
+                       (wgm_mode == 4'd8) || (wgm_mode == 4'd9) || (wgm_mode == 4'd10) ||
+                       (wgm_mode == 4'd11);
+wire effective_up_count = is_updown_mode ? up_count : 1'b1;
+
 wire clk_active = |TCCRB[`CS02:`CS00];
 
 /* Sampling implementation */
@@ -393,11 +401,11 @@ begin
         clk_int_del <= clk_int; // Shift prescaller clock to a delay register every IO core positive edge clock to detect prescaller positive edges.
         if((~clk_int_del & clk_int) || TCCRB[`CS02:`CS00] == 3'b001) // if prescaller clock = IO core clock disable prescaller positive edge detector.
         begin
-            if(up_count && (TCNT < top_value))
+            if(effective_up_count && (TCNT < top_value))
             begin
                 TCNT <= TCNT + 1'b1;
             end
-            else if(!up_count && (TCNT > 16'h0000))
+            else if(!effective_up_count && (TCNT > 16'h0000))
             begin
                 TCNT <= TCNT - 1'b1;
             end
@@ -417,7 +425,7 @@ begin
                             16'hFFFF: oca <= 1'b1;
                             default:
                             begin
-                                if(up_count)
+                                if(effective_up_count)
                                 begin
                                     case(TCCRA[`COM0A1:`COM0A0])
                                         2'h1: oca <= ~oca;
@@ -437,17 +445,9 @@ begin
                         endcase
                     end
                 endcase
-                if(TIMSK[`OCIE0A] == 1'b1)
+                if(ocra_p == ocra_n && clk_active == 1'b1)
                 begin
-                    if(ocra_p == ocra_n && clk_active == 1'b1)
-                    begin
-                        ocra_p <= ~ocra_p;
-                    end
-                end
-                else
-                begin
-                    ocra_p <= 1'b0;
-                    ocra_n <= 1'b0;
+                    ocra_p <= ~ocra_p;
                 end
             end
             // !OCRA
@@ -465,7 +465,7 @@ begin
                                 16'hFFFF: ocb <= 1'b1;
                                 default:
                                 begin
-                                    if(up_count)
+                                    if(effective_up_count)
                                     begin
                                         case(TCCRA[`COM0B1:`COM0B0])
                                             2'h1: ocb <= ~ocb;
@@ -485,17 +485,9 @@ begin
                             endcase
                         end
                     endcase
-                    if(TIMSK[`OCIE0B] == 1'b1)
+                    if(ocrb_p == ocrb_n && clk_active == 1'b1)
                     begin
-                        if(ocrb_p == ocrb_n && clk_active == 1'b1)
-                        begin
-                            ocrb_p <= ~ocrb_p;
-                        end
-                    end
-                    else
-                    begin
-                        ocrb_p <= 1'b0;
-                        ocrb_n <= 1'b0;
+                        ocrb_p <= ~ocrb_p;
                     end
                 end
             end // USE_OCRB != "TRUE"
@@ -513,7 +505,7 @@ begin
                                 16'hFFFF: occ <= 1'b1;
                                 default:
                                 begin
-                                    if(up_count)
+                                    if(effective_up_count)
                                     begin
                                         case(TCCRA[`COM0C1:`COM0C0])
                                             2'h1: occ <= ~occ;
@@ -533,34 +525,18 @@ begin
                             endcase
                         end
                     endcase
-                    if(TIMSK[`OCIE0C] == 1'b1)
+                    if(ocrc_p == ocrc_n && clk_active == 1'b1)
                     begin
-                        if(ocrc_p == ocrc_n && clk_active == 1'b1)
-                        begin
-                            ocrc_p <= ~ocrc_p;
-                        end
-                    end
-                    else
-                    begin
-                        ocrc_p <= 1'b0;
-                        ocrc_n <= 1'b0;
+                        ocrc_p <= ~ocrc_p;
                     end
                 end
             end // USE_OCRC != "TRUE"
             // TCNT overflow logick.
             if(TCNT == t_ovf_value)
             begin
-                if(TIMSK[`TOIE0] == 1'b1)
+                if(tov_p == tov_n && clk_active == 1'b1)
                 begin
-                    if(tov_p == tov_n && clk_active == 1'b1)
-                    begin
-                        tov_p <= ~tov_p;
-                    end
-                end
-                else
-                begin
-                    tov_p <= 1'b0;
-                    tov_n <= 1'b0;
+                    tov_p <= ~tov_p;
                 end
             end
             if(TCNT == top_value)
@@ -674,10 +650,10 @@ begin
     end
 end
 
-assign tov_int = TIFR[`TOV0];
-assign ocra_int = TIFR[`OCF0A];
-assign ocrb_int = TIFR[`OCF0B];
-assign ocrc_int = TIFR[`OCF0C];
+assign tov_int = TIFR[`TOV0] & TIMSK[`TOIE0];
+assign ocra_int = TIFR[`OCF0A] & TIMSK[`OCIE0A];
+assign ocrb_int = TIFR[`OCF0B] & TIMSK[`OCIE0B];
+assign ocrc_int = TIFR[`OCF0C] & TIMSK[`OCIE0C];
 
 // COM=01 connects OCA to the pin only for these WGM modes (ATmega32U4 datasheet Tables 14-1/14-2/14-3).
 wire [3:0] wgm_value = {TCCRB[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]};

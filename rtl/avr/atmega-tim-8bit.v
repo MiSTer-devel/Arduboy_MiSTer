@@ -121,6 +121,12 @@ reg clk_int_del;
 
 reg up_count;
 
+// Same defect class as atmega-tim-16bit.v: up_count only applies to genuine up/down-counting
+// modes (WGM 1/5); every other mode is monotonic on real hardware.
+wire [2:0] wgm_mode = {TCCRB[`WGM02], TCCRA[`WGM01:`WGM00]};
+wire is_updown_mode = (wgm_mode == 3'h1) || (wgm_mode == 3'h5);
+wire effective_up_count = is_updown_mode ? up_count : 1'b1;
+
 wire clk_active = |TCCRB[`CS02:`CS00];
 
 /* Sampling implementation */
@@ -281,10 +287,10 @@ begin
         clk_int_del <= clk_int; // Shift prescaller clock to a delay register every IO core positive edge clock to detect prescaller positive edges.
         if(((~clk_int_del & clk_int) || TCCRB[`CS02:`CS00] == 3'b001) && TCCRB[`CS02:`CS00] != 3'b000) // if prescaller clock = IO core clock disable prescaller positive edge detector.
         begin
-            if(up_count & ~halt)
+            if(effective_up_count & ~halt)
                 TCNT <= TCNT + 8'd1;
             else
-            if(~up_count & ~halt)
+            if(~effective_up_count & ~halt)
                 TCNT <= TCNT - 8'd1;
             // OCRA
             if(updt_ocr_on_top ? (TCNT == 8'hff):(TCNT == OCRA_int))
@@ -300,7 +306,7 @@ begin
                             8'hFF:  oca <= 1'b1;
                             default:
                             begin
-                                if(up_count)
+                                if(effective_up_count)
                                 begin
                                     case(TCCRA[`COM0A1:`COM0A0])
                                         2'h1: oca <= ~oca;
@@ -340,7 +346,7 @@ begin
                                 8'hFF:  ocb <= 1'b1;
                                 default:
                                 begin
-                                    if(up_count)
+                                    if(effective_up_count)
                                     begin
                                         case(TCCRA[`COM0B1:`COM0B0])
                                             2'h1: ocb <= ~ocb;
