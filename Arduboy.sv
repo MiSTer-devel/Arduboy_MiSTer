@@ -336,7 +336,7 @@ end
 wire Buzzer1, Buzzer2;
 wire oled_dc, oled_clk, oled_data;
 
-atmega32u4 atmega32u4
+arduboy_board arduboy_board
 (
     .clk(clk_avr),
     .rst(reset),
