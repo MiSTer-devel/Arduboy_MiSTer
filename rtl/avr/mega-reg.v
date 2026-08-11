@@ -38,7 +38,16 @@ module mega_regs #
 	input [4:0]rda,
 	input [15:0]rd,
 	input rdw,
-	input rdm
+	input rdm,
+	// mega-core OUT 1-cycle write-back, 2026-08-11: a dedicated, non-shared third read port for
+	// a retiring OUT's operand. rs1a/rs1 are shared with whatever instruction is CURRENTLY
+	// decoding (overwritten every cycle), so a retiring OUT reading rs1 one cycle after its own
+	// decode sees the FOLLOWING instruction's operand instead of its own -- confirmed as a real
+	// bug via simulation trace, not inferred. rs3a is set once at OUT's own decode and never
+	// touched again, so rs3 settles after exactly one cycle (same physical settling time as
+	// rs1/rs1a) and then stays correct, instead of being stolen by the next decode.
+	input [4:0]rs3a,
+	output reg[15:0]rs3
 	);
 
 generate
@@ -52,6 +61,7 @@ reg [7:0]REGH[0:15];
 wire [3:0]rda_int = rda[4:1];
 wire [3:0]rs1a_int = rs1a[4:1];
 wire [3:0]rs2a_int = rs2a[4:1];
+wire [3:0]rs3a_int = rs3a[4:1];
 
 integer clear_cnt;
 initial 
@@ -86,34 +96,46 @@ begin
 	end
 end
 
+// mega-regfile-timing-fix, 2026-08-10: this block is combinational (always @*) but was using
+// non-blocking assignment (<=) for rs1/rs2, which has no real hardware meaning here (no clock to
+// defer to) and adds a spurious extra simulation delta-cycle of lag on top of rs1a/rs2a's own
+// settling time -- root cause of OUT/IN needing 2 cycles instead of the datasheet's 1. Changed to
+// blocking assignment (=), the idiomatic form for combinational logic. See
+// projects/mega-regfile-timing-fix/PROJECT.md for the full investigation -- including why this fix
+// alone (validated, kept) was not sufficient to safely make OUT itself 1-cycle.
 always @ *
 begin
 	if(REGISTERED == "TRUE")
 	begin
 		casex({rs1m, rs1a[0]})
-		2'b00: rs1 <= {8'h00, REG_1_REG[7:0]};
-		2'b01: rs1 <= {8'h00, REG_1_REG[15:8]};
-		2'b1x: rs1 <= REG_1_REG;
+		2'b00: rs1 = {8'h00, REG_1_REG[7:0]};
+		2'b01: rs1 = {8'h00, REG_1_REG[15:8]};
+		2'b1x: rs1 = REG_1_REG;
 		endcase
 		casex({rs2m, rs2a[0]})
-		2'b00: rs2 <= {8'h00, REG_2_REG[7:0]};
-		2'b01: rs2 <= {8'h00, REG_2_REG[15:8]};
-		2'b1x: rs2 <= REG_2_REG;
+		2'b00: rs2 = {8'h00, REG_2_REG[7:0]};
+		2'b01: rs2 = {8'h00, REG_2_REG[15:8]};
+		2'b1x: rs2 = REG_2_REG;
 		endcase
 	end
 	else
 	begin
 		casex({rs1m, rs1a[0]})
-		2'b00: rs1 <= {8'h00, REGL[rs1a_int]};
-		2'b01: rs1 <= {8'h00, REGH[rs1a_int]};
-		2'b1x: rs1 <= {REGH[rs1a_int], REGL[rs1a_int]};
+		2'b00: rs1 = {8'h00, REGL[rs1a_int]};
+		2'b01: rs1 = {8'h00, REGH[rs1a_int]};
+		2'b1x: rs1 = {REGH[rs1a_int], REGL[rs1a_int]};
 		endcase
 		casex({rs2m, rs2a[0]})
-		2'b00: rs2 <= {8'h00, REGL[rs2a_int]};
-		2'b01: rs2 <= {8'h00, REGH[rs2a_int]};
-		2'b1x: rs2 <= {REGH[rs2a_int], REGL[rs2a_int]};
+		2'b00: rs2 = {8'h00, REGL[rs2a_int]};
+		2'b01: rs2 = {8'h00, REGH[rs2a_int]};
+		2'b1x: rs2 = {REGH[rs2a_int], REGL[rs2a_int]};
 		endcase
 	end
+	// rs3: dedicated OUT-retirement read port, always 8-bit (OUT never reads a 16-bit pair) --
+	// see the port declaration above. Read directly from REGL/REGH in both REGISTERED modes;
+	// unlike rs1/rs2 this doesn't need REGISTERED=="TRUE"'s extra buffering stage, since nothing
+	// else contends for rs3a the way rs1a/rs2a are shared across every instruction.
+	rs3 = rs3a[0] ? {8'h00, REGH[rs3a_int]} : {8'h00, REGL[rs3a_int]};
 end
 
 //assign rs1 = (rs1m) ? {REGH[rs1a[3:0]], REGL[rs1a[3:0]]} : (rs1a[0]) ? {8'h00, REGH[rs1a[4:1]]} : {8'h00, REGL[rs1a[4:1]]};
@@ -302,18 +324,25 @@ DPR16X4C REG_H_R_0_3(
 	.DO0(REGHR_out[0])
 );
 	
+// mega-regfile-timing-fix, 2026-08-10: same non-blocking-in-combinational anti-pattern as the
+// XILINX/iCE40UP branch above, fixed for consistency even though this LATTICE branch isn't
+// exercised by any core in this workspace (PLATFORM="XILINX" throughout).
 always @ *
 begin
 	case({rs1m, rs1a[0]})
-	2'b00: rs1 <= {8'h00, REGLD_out};
-	2'b01: rs1 <= {8'h00, REGHD_out};
-	default : rs1 <= {REGHD_out, REGLD_out};
+	2'b00: rs1 = {8'h00, REGLD_out};
+	2'b01: rs1 = {8'h00, REGHD_out};
+	default : rs1 = {REGHD_out, REGLD_out};
 	endcase
 	case({rs2m, rs2a[0]})
-	2'b00: rs2 <= {8'h00, REGLR_out};
-	2'b01: rs2 <= {8'h00, REGHR_out};
-	default : rs2 <= {REGHR_out, REGLR_out};
+	2'b00: rs2 = {8'h00, REGLR_out};
+	2'b01: rs2 = {8'h00, REGHR_out};
+	default : rs2 = {REGHR_out, REGLR_out};
 	endcase
+	// rs3 (OUT-retirement port) intentionally NOT implemented on this LATTICE branch -- it would
+	// need its own DPR16X4C read-port instances, and this branch is not exercised by any core in
+	// this workspace (PLATFORM="XILINX" throughout). Tied off so the port isn't left floating.
+	rs3 = 16'h0000;
 end
 
 //assign rs1 = (rs1m) ? {REGHD_out, REGLD_out} : (rs1a[0]) ? {8'h00, REGHD_out} : {8'h00, REGLD_out};
