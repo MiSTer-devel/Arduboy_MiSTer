@@ -1182,15 +1182,25 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_CBI_SBI}:
 					begin
 						if(pgm_data_registered[9])
-							data_out_int = data_in | (2 ** pgm_data_registered[2:0]);
+							data_out_int <= data_in | (2 ** pgm_data_registered[2:0]);
 						else
-							data_out_int = data_in & ~(2 ** pgm_data_registered[2:0]);
+							data_out_int <= data_in & ~(2 ** pgm_data_registered[2:0]);
 					end
-					{1'b1, `STEP1, `INSTRUCTION_OUT}: data_out_int = reg_rs1;
+					{1'b1, `STEP1, `INSTRUCTION_OUT}: data_out_int <= reg_rs1;
 				endcase
 				// OUT-retire write-back (data value): one cycle after decode.
+				// Non-blocking, unlike the pre-existing CBI_SBI/OUT arms above used to be --
+				// Quartus 17.0 rejects mixing blocking and non-blocking assignment to the same
+				// reg within one always block as a hard error (10110), even though the original
+				// code's single blocking arm here was apparently tolerated. Confirmed by an
+				// actual Quartus compile, not simulation (Icarus never flagged this) -- see
+				// projects/arduboy-out-fix/PROJECT.md. Safe: data_out_int is never read again
+				// within this same clocked block after being set, only by the separate
+				// combinational "Data bus switch" block, so blocking-vs-non-blocking here has no
+				// simulation-visible effect -- confirmed by re-running every existing test after
+				// this change with no regressions.
 				if(out_retire_fire)
-					data_out_int = out_reg_rs1;
+					data_out_int <= out_reg_rs1;
 	/* Set "data_write" */ /*************************************************************/
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP0, `INSTRUCTION_RCALL},
