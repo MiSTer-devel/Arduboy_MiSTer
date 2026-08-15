@@ -324,7 +324,50 @@ function bus_busy_user;
 			{`STEP0, `INSTRUCTION_POP},   {`STEP1, `INSTRUCTION_POP},
 			{`STEP0, `INSTRUCTION_IN},
 			{`STEP0, `INSTRUCTION_CBI_SBI},   {`STEP1, `INSTRUCTION_CBI_SBI},
-			{`STEP0, `INSTRUCTION_SBIC_SBIS}, {`STEP1, `INSTRUCTION_SBIC_SBIS}: bus_busy_user = 1'b1;
+			{`STEP0, `INSTRUCTION_SBIC_SBIS}, {`STEP1, `INSTRUCTION_SBIC_SBIS},
+			// 2026-08-12, Round 9/11 -- the 17 instructions this function omitted entirely (see
+			// projects/mega-regfile-timing-fix/PROJECT.md, Round 9). Two excluded on purpose:
+			// LDS16/STS16 are gated to `MEGA_REDUCED_LDS16_INT` (mega-def.v), unreachable at
+			// CORE_TYPE=MEGA_ENHANCED_128K -- the only tier Arduboy/Uzebox use -- confirmed via
+			// mega-def.v's own bit-pattern gate (bit2 must be 0; MEGA_ENHANCED_128K has bit2=1).
+			// STEP1/STEP2 entries are mechanically extracted from every place each instruction
+			// appears in this file's own "Set data_addr"/"Set data_out"/"Set data_write"/"Set
+			// data_read" blocks, not guessed -- these alone are enough to stop a same-cycle bus
+			// collision with a pending retirement, and are the load-bearing part of this fix.
+			//
+			// STEP0 entries for these 15 were originally added on top as defense-in-depth (see git
+			// history / PROJECT.md Round 11), NOT because a program-order violation was proven for
+			// these instructions specifically -- tb_out_st_reorder.v passed identically with or
+			// without them from the start. That defense-in-depth was REMOVED 2026-08-14 (Round 16,
+			// Steps 16-19, ported from projects/uzebox/rtl/avr/mega-core.v): full-history
+			// simulation found it was directly responsible for the Uzebox video-interrupt freeze --
+			// STEP0 coverage for exactly these 15 types held an incoming instruction (NOP
+			// substitution, PC frozen, re-checked every cycle) 90,969 times over 4.4M instructions
+			// (100% of all such holds measured; the original 9 instructions above caused zero),
+			// costing ~91,000 excess cycles real hardware (checked directly against uzem, the
+			// community reference emulator) never pays. That excess shifted interrupt-vs-foreground
+			// timing enough to trip a real game-code race condition. This removes NO instruction
+			// support -- LD/ST/PUSH remain fully decoded and executed; only this specific
+			// pre-emptive STEP0 hold is gone. STEP1/STEP2 remain untouched: they are mechanically
+			// derived from every real site each instruction touches the shared bus at, and are the
+			// load-bearing part of this protection -- these are what still prevent the same-cycle
+			// collision Round 9 found. See PROJECT.md Round 16, "Step 19", for the quantification
+			// and PROJECT.md Round 11 for the original defense-in-depth reasoning.
+			{`STEP1, `INSTRUCTION_LDD},    {`STEP2, `INSTRUCTION_LDD},
+			{`STEP1, `INSTRUCTION_LDS},    {`STEP2, `INSTRUCTION_LDS},
+			{`STEP1, `INSTRUCTION_LD_X},   {`STEP2, `INSTRUCTION_LD_X},
+			{`STEP1, `INSTRUCTION_LD_XP},  {`STEP2, `INSTRUCTION_LD_XP},
+			{`STEP1, `INSTRUCTION_LD_XN},  {`STEP2, `INSTRUCTION_LD_XN},
+			{`STEP1, `INSTRUCTION_LD_YZP}, {`STEP2, `INSTRUCTION_LD_YZP},
+			{`STEP1, `INSTRUCTION_LD_YZN}, {`STEP2, `INSTRUCTION_LD_YZN},
+			{`STEP1, `INSTRUCTION_STD},
+			{`STEP1, `INSTRUCTION_STS},
+			{`STEP1, `INSTRUCTION_ST_X},
+			{`STEP1, `INSTRUCTION_ST_XP},
+			{`STEP1, `INSTRUCTION_ST_XN},  {`STEP2, `INSTRUCTION_ST_XN},
+			{`STEP1, `INSTRUCTION_ST_YZP},
+			{`STEP1, `INSTRUCTION_ST_YZN}, {`STEP2, `INSTRUCTION_ST_YZN},
+			{`STEP1, `INSTRUCTION_PUSH}: bus_busy_user = 1'b1;
 			default: bus_busy_user = 1'b0;
 		endcase
 	end
