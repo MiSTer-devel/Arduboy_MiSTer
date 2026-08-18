@@ -73,15 +73,32 @@ begin
 	end
 end
 
+// DIAGNOSTIC, 2026-08-18 -- NOT confirmed as datasheet-correct. Real AVR silicon does not
+// guarantee r0-r31 are cleared by reset (only SREG/SP/I-O defaults are datasheet-specified);
+// avr-libc's own crt0 explicitly zeroes r1 on every real boot regardless. Added here only to
+// test whether leftover register-file content (not cleared by any prior reset/reload) explains
+// the cross-game state carryover seen on experiment/out-in-1cycle-v2 -- see
+// projects/arduboy-out-fix/PROJECT.md. Revert if this doesn't change that behavior.
 always @ (posedge clk)
 begin
-	case({rdw, rdm, rda[0]})
-	3'b100, 3'b110, 3'b111: REGL[rda_int] <= rd[7:0];
-	endcase
-	case({rdw, rdm, rda[0]})
-	3'b101: REGH[rda_int] <= rd[7:0];
-	3'b110, 3'b111: REGH[rda_int] <= rd[15:8];
-	endcase
+	if(rst)
+	begin
+		for(clear_cnt = 0; clear_cnt < 16; clear_cnt = clear_cnt + 1)
+		begin
+			REGL[clear_cnt] <= 8'h00;
+			REGH[clear_cnt] <= 8'h00;
+		end
+	end
+	else
+	begin
+		case({rdw, rdm, rda[0]})
+		3'b100, 3'b110, 3'b111: REGL[rda_int] <= rd[7:0];
+		endcase
+		case({rdw, rdm, rda[0]})
+		3'b101: REGH[rda_int] <= rd[7:0];
+		3'b110, 3'b111: REGH[rda_int] <= rd[15:8];
+		endcase
+	end
 end
 
 reg [15:0]REG_1_REG;
