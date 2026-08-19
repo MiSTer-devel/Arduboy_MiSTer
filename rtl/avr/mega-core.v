@@ -424,16 +424,33 @@ begin
 		if(&{~skip_next_clock, ~cnt_rst, (USE_HALT != "TRUE" | ~halt_int | state_cnt != `STEP0)})
 		begin
 			case({unlock_int_registered_step_2, int_request, sreg_out[`XMEGA_FLAG_I], state_cnt})
-				{3'b011, `STEP0}: 
+				{3'b011, `STEP0}:
 				begin
 					//if(~|last_state)
 					//begin
-					pgm_data_int = 16'b1001010000001110;
-					int_registered = 1'b1;
-					int_rst = 1'b1 << (current_int_vect_request - 1);
+					// Round 21 fix (see projects/mega-regfile-timing-fix/PROJECT.md) -- this STEP0
+					// case manufactures a synthetic CALL opcode (0x940E) and pushes it through the
+					// same STEP0/STEP1 path a real, ROM-fetched CALL uses, including CALL's own
+					// stack push (drives the same data_addr_int/data_out_int/data_write_int bus a
+					// pending OUT retirement, out_retire_pending, also needs to fire on). A real
+					// CALL colliding with a pending retirement is already protected by
+					// bus_busy_user() below; this one-cycle synthetic word is NOT, because it never
+					// goes through holding_instr's capture/retry path, and routing it through that
+					// path instead corrupted the CPU (Round 21 root cause -- holding_instr cannot
+					// tell this word apart from a real CALL and mishandles its own state on
+					// release). Fix: give interrupt entry its own, self-contained wait -- reuse the
+					// same hazard check a real CALL already gets, and simply don't dispatch yet on
+					// a colliding cycle. The interrupt stays pending (int_rst doesn't fire) and
+					// this case is re-checked next cycle, same as any other stalled dispatch.
+					if(~(out_retire_pending & bus_busy_user(`STEP0, 16'b1001010000001110)))
+					begin
+						pgm_data_int = 16'b1001010000001110;
+						int_registered = 1'b1;
+						int_rst = 1'b1 << (current_int_vect_request - 1);
+					end
 					//end
 				end
-				{3'b111, `STEP1}: 
+				{3'b111, `STEP1}:
 				begin
 					pgm_data_int = {current_int_vect_registered, 1'b0};
 					int_registered = 1'b1;
@@ -450,7 +467,10 @@ begin
 	begin
 		if(&{~skip_next_clock, ~cnt_rst, (USE_HALT != "TRUE" | ~halt_int | state_cnt != `STEP0)})
 		begin
-			if({unlock_int_registered_step_2, int_request, sreg_out[`XMEGA_FLAG_I], state_cnt} == {3'b011, `STEP0})
+			// Gated the same way as the STEP0 case above, and for the same reason: only latch once
+			// the injection itself is actually going to fire this cycle, so the two stay in lockstep.
+			if(({unlock_int_registered_step_2, int_request, sreg_out[`XMEGA_FLAG_I], state_cnt} == {3'b011, `STEP0})
+				& ~(out_retire_pending & bus_busy_user(`STEP0, 16'b1001010000001110)))
 				current_int_vect_registered <= current_int_vect_request;
 		end
 	end
@@ -586,6 +606,16 @@ initial begin
 	data_out_int = 8'h00;
 	PC_TMP_H = 8'h00;
 	int_rst = 1'b0;
+	// OUT 1-cycle retirement/hazard state, 2026-08-12 -- see
+	// projects/mega-regfile-timing-fix/PROJECT.md Round 7/Round 9. Without this, Icarus starts
+	// these as X (undriven reg) and real Quartus-synthesized silicon would power up to some
+	// unspecified concrete value, since neither simulator nor synthesizer has a defined value to
+	// fall back on without an explicit initial value.
+	out_retire_pending = 1'b0;
+	out_retire_instr = 16'h0000;
+	out_rs1a = 5'h00;
+	held_instr = 16'h0000;
+	holding_instr = 1'b0;
 end
 
 reg halt_ack_n;
@@ -606,6 +636,15 @@ begin
 		//io_addr_int <= 6'h00;
 		//io_out_int = 8'h00;
 		//PC_TMP_H <= 8'h00;
+		// OUT 1-cycle retirement/hazard state, 2026-08-12 -- see
+		// projects/mega-regfile-timing-fix/PROJECT.md Round 7/Round 9. Unlike SP/SREG/etc above,
+		// these two are live control state, not data a fresh boot immediately overwrites -- if a
+		// retirement or hold is stuck when a soft reset happens, nothing in software can ever
+		// unstick it, so core_rst (unlike a cold power-up) has to actively clear it. out_retire_
+		// instr/out_rs1a/held_instr don't need clearing here: like SP/data_out_int above, they're
+		// only ever read while one of these two flags is set.
+		out_retire_pending <= 1'b0;
+		holding_instr <= 1'b0;
 	end
 	else
 	begin
