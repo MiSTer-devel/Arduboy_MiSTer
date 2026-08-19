@@ -73,12 +73,19 @@ begin
 	end
 end
 
-// DIAGNOSTIC, 2026-08-18 -- NOT confirmed as datasheet-correct. Real AVR silicon does not
-// guarantee r0-r31 are cleared by reset (only SREG/SP/I-O defaults are datasheet-specified);
-// avr-libc's own crt0 explicitly zeroes r1 on every real boot regardless. Added here only to
-// test whether leftover register-file content (not cleared by any prior reset/reload) explains
-// the cross-game state carryover seen on experiment/out-in-1cycle-v2 -- see
-// projects/arduboy-out-fix/PROJECT.md. Revert if this doesn't change that behavior.
+// Added 2026-08-18 as a diagnostic, KEPT 2026-08-20 after hardware re-confirmation. Real AVR
+// silicon does not guarantee r0-r31 are cleared by reset (only SREG/SP/I-O defaults are
+// datasheet-specified) -- this is not claimed as datasheet-mandated behavior, only as a real,
+// hardware-confirmed fix for an observed symptom: loading Catacombs of the Damned then reloading
+// Crabator (without a full power cycle) produced garbled graphics and one continuous stuck tone,
+// versus loading Crabator fresh. Widening mega-ram.v's reset-clear counter alone did not fix this
+// (confirmed at the time); adding this register-file clear did. Retested 2026-08-20 with this
+// change plus the rest of experiment/out-in-1cycle-v2's current state (Round 21 interrupt-entry
+// fix, core_rst retirement-state coverage) -- Cory confirmed the symptom no longer reproduces.
+// Not fully isolated as the specific cause versus the other fixes landing alongside it in the same
+// build, but the pre-existing evidence (mega-ram fix alone was insufficient) makes it the leading
+// explanation. See projects/arduboy-out-fix/PROJECT.md and projects/mega-regfile-timing-fix/
+// PROJECT.md, Round 23, for the full history.
 always @ (posedge clk)
 begin
 	if(rst)
