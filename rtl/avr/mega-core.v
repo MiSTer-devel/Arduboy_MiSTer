@@ -442,7 +442,28 @@ begin
 					// same hazard check a real CALL already gets, and simply don't dispatch yet on
 					// a colliding cycle. The interrupt stays pending (int_rst doesn't fire) and
 					// this case is re-checked next cycle, same as any other stalled dispatch.
-					if(~(out_retire_pending & bus_busy_user(`STEP0, 16'b1001010000001110)))
+					//
+					// Second, distinct gap found chasing the Round 24 choppy-audio investigation
+					// (projects/mega-regfile-timing-fix/PROJECT.md, Round 24 continuation): the
+					// check above only protects against a NEW retirement colliding with THIS
+					// synthetic word. It says nothing about holding_instr already being active from
+					// an EARLIER, completely unrelated collision (a real, ROM-fetched instruction
+					// that got captured and is still waiting to release -- see the "Set
+					// holding_instr"/"holding_instr" blocks below). On the exact cycle an old hold
+					// releases, the clocked block's if/else-if chain (cnt_rst -> holding_instr ->
+					// this synthetic-word latch) gives the stale held_instr priority over
+					// pgm_data_int unconditionally -- confirmed directly in simulation: int_registered
+					// and int_rst fire here exactly as designed (the peripheral's pending flag gets
+					// cleared, so it never asks again), but pgm_data_registered ends up latching
+					// held_instr instead of pgm_data_int, so the CPU never actually redirects to the
+					// vector -- the interrupt is silently dropped, not delayed. On real audio code
+					// this manifests as one fully missed tone-timer tick (a doubled gap in the
+					// output waveform) every time the two coincide. Fix: don't dispatch on a cycle
+					// where holding_instr is active, for the same reason as the retirement check
+					// above -- pgm_data_registered is guaranteed to go to holding_instr's release
+					// path this cycle regardless, so presenting the synthetic word here would just
+					// be silently discarded. Stays pending and retries next cycle, same pattern.
+					if(~(out_retire_pending & bus_busy_user(`STEP0, 16'b1001010000001110)) & ~holding_instr)
 					begin
 						pgm_data_int = 16'b1001010000001110;
 						int_registered = 1'b1;
@@ -469,8 +490,10 @@ begin
 		begin
 			// Gated the same way as the STEP0 case above, and for the same reason: only latch once
 			// the injection itself is actually going to fire this cycle, so the two stay in lockstep.
+			// ~holding_instr added alongside the retirement check for the same reason it was added
+			// above -- see that comment for the full mechanism.
 			if(({unlock_int_registered_step_2, int_request, sreg_out[`XMEGA_FLAG_I], state_cnt} == {3'b011, `STEP0})
-				& ~(out_retire_pending & bus_busy_user(`STEP0, 16'b1001010000001110)))
+				& ~(out_retire_pending & bus_busy_user(`STEP0, 16'b1001010000001110)) & ~holding_instr)
 				current_int_vect_registered <= current_int_vect_request;
 		end
 	end
