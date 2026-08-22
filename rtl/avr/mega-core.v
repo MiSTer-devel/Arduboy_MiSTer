@@ -249,6 +249,7 @@ reg [15:0]alu_rs2;
 wire [15:0]alu_rd;
 
 wire [15:0]reg_rs1;
+wire [15:0]ijmp_z;
 reg reg_rs1m;
 wire [15:0]reg_rs2;
 reg reg_rs2m;
@@ -261,6 +262,9 @@ reg skip_next_clock;
 reg halt_int;
 
 reg [7:0]PC_TMP_H;
+// Latches CALL's 2nd instruction word at STEP1, before fetch moves past it -- STEP2's redirect
+// can't read pgm_data_int directly, since by then it holds whatever address is fetching next.
+reg [15:0]call_word2;
 
 wire [ROM_ADDR_WIDTH - 1:0]PC_PLUS_ONE = PC + 1;
 wire [ROM_ADDR_WIDTH - 1:0]PC_MINUS_ONE = PC - 1;
@@ -595,6 +599,7 @@ initial begin
 	data_addr_int = 'h00000000;
 	data_out_int = 8'h00;
 	PC_TMP_H = 8'h00;
+	call_word2 = 16'h0000;
 	int_rst = 1'b0;
 	// OUT 1-cycle retirement/hazard state, 2026-08-12 -- see
 	// projects/mega-regfile-timing-fix/PROJECT.md Round 7/Round 9. Without this, Icarus starts
@@ -853,14 +858,12 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_ANDI_CBR}: rs1a[4] <= 1'b1;
 					{1'b1, `STEP0, `INSTRUCTION_ADIW},
 					{1'b1, `STEP0, `INSTRUCTION_SBIW}: rs1a <= {2'b11, pgm_data_registered[5:4], 1'b0};
-					{1'b1, `STEP0, `INSTRUCTION_IJMP},
 					{1'b1, `STEP0, `INSTRUCTION_ICALL}: rs1a <= 5'b11110;
 				endcase
 	/* Set "reg_rs1m" */ /*************************************************************/
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP0, `INSTRUCTION_ADIW},
 					{1'b1, `STEP0, `INSTRUCTION_SBIW},
-					{1'b1, `STEP0, `INSTRUCTION_IJMP},
 					{1'b1, `STEP0, `INSTRUCTION_ICALL}: reg_rs1m <= `REG_MODE_16_BIT;
 				endcase
 	/* Set "rs2a" */ /*************************************************************/
@@ -979,11 +982,11 @@ begin
 						end
 					end
 					{1'b1, `STEP0, `INSTRUCTION_RJMP},
+					{1'b1, `STEP0, `INSTRUCTION_IJMP},
 					{1'b1, `STEP1, `INSTRUCTION_JMP},
-					{1'b1, `STEP1, `INSTRUCTION_IJMP},
 					{1'b1, `STEP1, `INSTRUCTION_RCALL},
-					{1'b1, `STEP1, `INSTRUCTION_CALL},
 					{1'b1, `STEP1, `INSTRUCTION_ICALL},
+					{1'b1, `STEP2, `INSTRUCTION_CALL},
 					{1'b1, `STEP3, `INSTRUCTION_RET},
 					{1'b1, `STEP3, `INSTRUCTION_RETI}: skip_next_clock <= 1'b1;
 				endcase
@@ -1319,7 +1322,6 @@ begin
 	/* Set "state_cnt" */ /*************************************************************/
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP0, `INSTRUCTION_JMP},
-					{1'b1, `STEP0, `INSTRUCTION_IJMP},
 					{1'b1, `STEP0, `INSTRUCTION_RCALL},
 					{1'b1, `STEP0, `INSTRUCTION_CALL},
 					{1'b1, `STEP0, `INSTRUCTION_ICALL},
@@ -1359,6 +1361,7 @@ begin
 					// "Set out_retire_pending" block above re-checks whether it can arm yet.
 					{1'b1, `STEP0, `INSTRUCTION_OUT}: if(`OUT_TARGETS_SREG) state_cnt <= `STEP1;
 	/*************************************************************/
+					{1'b1, `STEP1, `INSTRUCTION_CALL},
 					{1'b1, `STEP1, `INSTRUCTION_RET},
 					{1'b1, `STEP1, `INSTRUCTION_RETI}: state_cnt <= `STEP2;
 					{1'b1, `STEP1, `INSTRUCTION_CPSE}:
@@ -1449,6 +1452,7 @@ begin
 							PC_TMP_H <= PC_SNAPSHOOT[ROM_ADDR_WIDTH - 1:8];
 					end
 					{1'b1, `STEP0, `INSTRUCTION_ICALL}: PC_TMP_H <= PC[ROM_ADDR_WIDTH - 1:8];
+					{1'b1, `STEP1, `INSTRUCTION_CALL}: call_word2 <= pgm_data_int;
 					{1'b1, `STEP2, `INSTRUCTION_RET},
 					{1'b1, `STEP2, `INSTRUCTION_RETI}: PC_TMP_H <= data_in_int;
 				endcase
@@ -1460,11 +1464,12 @@ begin
 						if(sreg_out[pgm_data_registered[2:0]] == ~pgm_data_registered[10])
 							PC <= PC + {{ROM_ADDR_WIDTH - 6{pgm_data_registered[9]}}, pgm_data_registered[8:3]};
 					end
+					{1'b1, `STEP0, `INSTRUCTION_IJMP}: PC <= ijmp_z;
 					{1'b1, `STEP1, `INSTRUCTION_JMP}: PC <= {pgm_data_registered[8:4], pgm_data_registered[0], pgm_data_int};
-					{1'b1, `STEP1, `INSTRUCTION_IJMP}: PC <= reg_rs1;
 					{1'b1, `STEP0, `INSTRUCTION_RCALL}:  PC <= PC;
 					{1'b1, `STEP1, `INSTRUCTION_RCALL}: PC <= PC + {{ROM_ADDR_WIDTH - 11{pgm_data_registered[11]}}, pgm_data_registered[10:0]};
-					{1'b1, `STEP1, `INSTRUCTION_CALL}: PC <= {pgm_data_registered[8:4], pgm_data_registered[0], pgm_data_int};
+					{1'b1, `STEP1, `INSTRUCTION_CALL}: PC <= PC;
+					{1'b1, `STEP2, `INSTRUCTION_CALL}: PC <= {pgm_data_registered[8:4], pgm_data_registered[0], call_word2};
 					{1'b1, `STEP1, `INSTRUCTION_ICALL}: PC <= reg_rs1;
 					{1'b1, `STEP0, `INSTRUCTION_PUSH},
 					{1'b1, `STEP0, `INSTRUCTION_RET},
@@ -1551,7 +1556,8 @@ mega_regs #(
 	.rdw(reg_rdw),
 	.rdm(reg_rdm),
 	.rs3a(out_rs1a),
-	.rs3(out_reg_rs1)
+	.rs3(out_reg_rs1),
+	.z_reg(ijmp_z)
 );
 
 watchdog # (

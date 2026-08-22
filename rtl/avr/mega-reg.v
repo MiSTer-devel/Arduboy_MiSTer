@@ -47,7 +47,10 @@ module mega_regs #
 	// touched again, so rs3 settles after exactly one cycle (same physical settling time as
 	// rs1/rs1a) and then stays correct, instead of being stolen by the next decode.
 	input [4:0]rs3a,
-	output reg[15:0]rs3
+	output reg[15:0]rs3,
+	// Fixed-index (r31:r30) combinational tap, bypassing the shared rs1a/rs1 pipeline's
+	// one-cycle latency -- needed so IJMP can redirect PC the same cycle it decodes.
+	output [15:0]z_reg
 	);
 
 generate
@@ -57,6 +60,15 @@ begin
 reg [7:0]REGL[0:15];
 //(* ram_style="block" *)
 reg [7:0]REGH[0:15];
+
+// Z (r31:r30) is register-file index 15. A write landing here takes a cycle to reach
+// REGL/REGH (see the clocked write block below), so a same-cycle read must bypass the
+// array and take rd directly -- otherwise a register just written by the instruction
+// immediately before an IJMP reads as stale.
+wire z_write = rdw & (rda[4:1] == 4'hF);
+wire [7:0] z_low  = (z_write & (rdm | ~rda[0])) ? rd[7:0]                    : REGL[15];
+wire [7:0] z_high = (z_write & (rdm |  rda[0])) ? (rdm ? rd[15:8] : rd[7:0]) : REGH[15];
+assign z_reg = {z_high, z_low};
 
 wire [3:0]rda_int = rda[4:1];
 wire [3:0]rs1a_int = rs1a[4:1];
