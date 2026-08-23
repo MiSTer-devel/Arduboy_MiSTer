@@ -77,7 +77,9 @@ end
 reg [15:0]REG_1_REG;
 reg [15:0]REG_2_REG;
 
-always @ (posedge PLATFORM == "iCE40UP" ? ~clk : clk)
+wire cclk = (PLATFORM == "iCE40UP") ? ~clk : clk;
+
+always @ (posedge cclk)
 begin
 	if(REGISTERED == "TRUE")
 	begin
