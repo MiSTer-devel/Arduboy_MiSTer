@@ -39,13 +39,9 @@ module mega_regs #
 	input [15:0]rd,
 	input rdw,
 	input rdm,
-	// mega-core OUT 1-cycle write-back, 2026-08-11: a dedicated, non-shared third read port for
-	// a retiring OUT's operand. rs1a/rs1 are shared with whatever instruction is CURRENTLY
-	// decoding (overwritten every cycle), so a retiring OUT reading rs1 one cycle after its own
-	// decode sees the FOLLOWING instruction's operand instead of its own -- confirmed as a real
-	// bug via simulation trace, not inferred. rs3a is set once at OUT's own decode and never
-	// touched again, so rs3 settles after exactly one cycle (same physical settling time as
-	// rs1/rs1a) and then stays correct, instead of being stolen by the next decode.
+	// Dedicated, non-shared third read port for a retiring OUT's operand -- rs1a/rs1 are
+	// shared with whatever instruction is currently decoding, so a retiring OUT reading rs1
+	// one cycle after its own decode would see the following instruction's operand instead.
 	input [4:0]rs3a,
 	output reg[15:0]rs3,
 	// Fixed-index (r31:r30) combinational tap, bypassing the shared rs1a/rs1 pipeline's
@@ -85,19 +81,9 @@ begin
 	end
 end
 
-// Added 2026-08-18 as a diagnostic, KEPT 2026-08-20 after hardware re-confirmation. Real AVR
-// silicon does not guarantee r0-r31 are cleared by reset (only SREG/SP/I-O defaults are
-// datasheet-specified) -- this is not claimed as datasheet-mandated behavior, only as a real,
-// hardware-confirmed fix for an observed symptom: loading Catacombs of the Damned then reloading
-// Crabator (without a full power cycle) produced garbled graphics and one continuous stuck tone,
-// versus loading Crabator fresh. Widening mega-ram.v's reset-clear counter alone did not fix this
-// (confirmed at the time); adding this register-file clear did. Retested 2026-08-20 with this
-// change plus the rest of experiment/out-in-1cycle-v2's current state (Round 21 interrupt-entry
-// fix, core_rst retirement-state coverage) -- Cory confirmed the symptom no longer reproduces.
-// Not fully isolated as the specific cause versus the other fixes landing alongside it in the same
-// build, but the pre-existing evidence (mega-ram fix alone was insufficient) makes it the leading
-// explanation. See projects/arduboy-out-fix/PROJECT.md and projects/mega-regfile-timing-fix/
-// PROJECT.md, Round 23, for the full history.
+// Not datasheet-mandated (real AVR silicon doesn't guarantee r0-r31 clear on reset, only
+// SREG/SP/I-O defaults are specified) -- included because it fixes a real, hardware-confirmed
+// cross-game state-carryover symptom (stale register content surviving a soft reset/reload).
 always @ (posedge clk)
 begin
 	if(rst)
@@ -132,13 +118,9 @@ begin
 	end
 end
 
-// mega-regfile-timing-fix, 2026-08-10: this block is combinational (always @*) but was using
-// non-blocking assignment (<=) for rs1/rs2, which has no real hardware meaning here (no clock to
-// defer to) and adds a spurious extra simulation delta-cycle of lag on top of rs1a/rs2a's own
-// settling time -- root cause of OUT/IN needing 2 cycles instead of the datasheet's 1. Changed to
-// blocking assignment (=), the idiomatic form for combinational logic. See
-// projects/mega-regfile-timing-fix/PROJECT.md for the full investigation -- including why this fix
-// alone (validated, kept) was not sufficient to safely make OUT itself 1-cycle.
+// This block is combinational (always @*) but was using non-blocking assignment (<=) for
+// rs1/rs2, adding a spurious extra simulation delta-cycle of lag on top of rs1a/rs2a's own
+// settling time. Changed to blocking (=), the idiomatic form for combinational logic.
 always @ *
 begin
 	if(REGISTERED == "TRUE")
@@ -360,9 +342,8 @@ DPR16X4C REG_H_R_0_3(
 	.DO0(REGHR_out[0])
 );
 	
-// mega-regfile-timing-fix, 2026-08-10: same non-blocking-in-combinational anti-pattern as the
-// XILINX/iCE40UP branch above, fixed for consistency even though this LATTICE branch isn't
-// exercised by any core in this workspace (PLATFORM="XILINX" throughout).
+// Same non-blocking-in-combinational fix as the XILINX/iCE40UP branch above, for consistency
+// (this LATTICE branch isn't exercised by any core in this workspace, PLATFORM="XILINX").
 always @ *
 begin
 	case({rs1m, rs1a[0]})

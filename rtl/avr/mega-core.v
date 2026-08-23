@@ -207,40 +207,22 @@ reg [4:0]rs1a;
 reg [4:0]rs2a;
 reg [4:0]rda;
 
-// OUT 1-cycle write-back stage, 2026-08-11 -- see projects/mega-regfile-timing-fix/PROJECT.md and
-// projects/uzebox/PROJECT.md for the full investigation. rs1a/reg_rs1 for a same-STEP0-read of OUT
-// aren't settled until a full cycle after decode (cross-module NBA propagation through mega_regs),
-// so OUT's SREG/SP/data-bus side effects are deferred, decoupled from state_cnt.
-//
-// out_retire_pending is a LEVEL signal, not a one-shot pulse: it stays 1 for as long as a deferred
-// write hasn't yet found a free bus cycle (see bus_busy_this_cycle above, and the "Set
-// out_retire_pending" block below for the full state machine). At most one retirement is ever
-// pending at a time -- a second OUT cannot decode onto the fast path while one is still waiting,
-// it stalls instead (see the PC/state_cnt arms below) -- so out_retire_instr/out_rs1a are never at
-// risk of being overwritten before the pending write they belong to actually fires.
-//
-// out_rs1a is a DEDICATED, non-shared copy of rs1a's own default-assignment rule
-// (out_rs1a <= pgm_data_registered[8:4], set once at OUT's own decode), read via mega_regs' third
-// port (rs3a/rs3). This is deliberately NOT "capture reg_rs1 into a register one edge later" --
-// that was tried first and is a real, confirmed-by-simulation bug: reg_rs1 is shared with
-// whatever instruction is CURRENTLY decoding (rs1a is overwritten every cycle by the default
-// assignment), so by the time a retiring OUT would read it, rs1a/reg_rs1 already belong to the
-// NEXT instruction, not this one. out_rs1a is never touched by any other instruction, so it
-// settles after exactly one cycle (same physical settling time as rs1/rs1a) and then simply
-// stays correct for as long as it's needed, with no capture-timing window to get wrong.
+// Deferred OUT write-back: rs1a/reg_rs1 for a same-cycle OUT read aren't settled until a cycle
+// after decode (cross-module NBA through mega_regs), so OUT's SREG/SP/data-bus side effects are
+// deferred to a pending retirement instead of completing at decode. out_retire_pending is a
+// level signal; at most one retirement is pending at a time (a second OUT stalls rather than
+// overwriting it). out_rs1a is a dedicated, non-shared latch of rs1a's operand field (read via
+// mega_regs' third port rs3a/rs3) -- rs1a/reg_rs1 themselves belong to whichever instruction is
+// currently decoding by the time a retiring OUT would read them.
 reg out_retire_pending;
 reg [15:0]out_retire_instr;
 reg [4:0]out_rs1a;
 wire [15:0]out_reg_rs1;
 
-// Read-after-write hazard holding register, 2026-08-11 -- see the pgm_data_registered update
-// site below for why. A naive "freeze PC, let it re-fetch the same instruction" was tried first
-// and is wrong: PC runs two pipeline stages ahead of pgm_data_registered (this engine's own
-// fetch/decode structure, established earlier in this investigation), so freezing PC at its
-// CURRENT value and re-fetching lands on the instruction AFTER the blocked one, silently
-// skipping it -- confirmed by simulation (fn32's r12 read never happened at all). Capturing the
-// actual blocked opcode directly and releasing it later, instead of re-deriving it through the
-// ROM a second time, sidesteps the pipeline-lag arithmetic entirely.
+// Holds a real instruction that collided with a pending OUT retirement on fetch, for replay
+// once the hazard clears. The held opcode is captured and replayed directly rather than
+// re-fetched: PC runs two pipeline stages ahead of pgm_data_registered, so a freeze-and-refetch
+// would land on the instruction after the blocked one and silently skip it.
 reg holding_instr;
 reg [15:0]held_instr;
 
@@ -291,30 +273,12 @@ reg [int_bus_size - 1 : 0]current_int_vect_registered;
 wire int_request;
 reg int_registered;
 
-// Second design, 2026-08-11 -- the first design (peek at pgm_data_int for the NEXT instruction,
-// at OUT's own decode edge, to decide fast-vs-fallback up front) is GONE. It relied on
-// pgm_data_int being settled to the next instruction's opcode within the same edge OUT itself
-// decodes on, and simulation proved that's false: pgm_data_int, read at that exact edge, still
-// reflects the CURRENT instruction (pgm_data hasn't had its own NBA land yet, one whole edge
-// behind where the peek needs it) -- confirmed by direct trace (fn32/fn52 regressed to a single
-// residual byte mismatch each from exactly this). No amount of registering pgm_data_int earlier
-// fixes it either, per the "no free lookahead cycle" finding elsewhere in this project.
-//
-// This design instead never looks ahead at all. OUT unconditionally takes the fast path (defers
-// its write to a PENDING retirement, below) and the deferred write simply waits, cycle by cycle,
-// for the data bus to be free -- checked using ONLY the CURRENT cycle's state_cnt/pgm_data_registered,
-// which (unlike pgm_data_int) are read directly within the same block that just wrote them and are
-// confirmed reliable that way (out_retire_instr <= pgm_data_registered already relies on exactly
-// this). bus_busy_user mirrors every STEP where the "Set data_addr"/"Set data_out"/
-// "Set data_write"/"Set data_read" blocks below already touch the bus for a non-OUT instruction.
-//
-// A FUNCTION, not a separate always@*/wire: a function call is evaluated inline, as part of
-// whichever procedural statement calls it -- not a separate triggered process -- so it sees
-// pgm_data_registered's freshly-blocking-updated value the same way any other statement further
-// down in this same clocked block does. A plain `wire`/`always@*` reading pgm_data_registered
-// from outside this exact procedural flow was empirically proven unreliable twice in this file
-// already (OUT_TARGETS_SREG's own history, and this same bus-busy check's first version) -- both
-// read pgm_data_registered one edge late.
+// A function, not a wire/always@*, so it reads pgm_data_registered's freshly-blocking-updated
+// value inline within this clocked block rather than one edge stale. OUT unconditionally defers
+// its write to a pending retirement (out_retire_pending) rather than peeking ahead at the next
+// instruction; the deferred write waits, cycle by cycle, for the data bus to be free. Mirrors
+// every STEP where the "Set data_addr"/"Set data_out"/"Set data_write"/"Set data_read" blocks
+// below touch the bus for a non-OUT instruction.
 function bus_busy_user;
 	input [1:0] chk_state;
 	input [15:0] chk_instr;
@@ -329,34 +293,13 @@ function bus_busy_user;
 			{`STEP0, `INSTRUCTION_IN},
 			{`STEP0, `INSTRUCTION_CBI_SBI},   {`STEP1, `INSTRUCTION_CBI_SBI},
 			{`STEP0, `INSTRUCTION_SBIC_SBIS}, {`STEP1, `INSTRUCTION_SBIC_SBIS},
-			// 2026-08-12, Round 9/11 -- the 17 instructions this function omitted entirely (see
-			// projects/mega-regfile-timing-fix/PROJECT.md, Round 9). Two excluded on purpose:
-			// LDS16/STS16 are gated to `MEGA_REDUCED_LDS16_INT` (mega-def.v), unreachable at
-			// CORE_TYPE=MEGA_ENHANCED_128K -- the only tier Arduboy/Uzebox use -- confirmed via
-			// mega-def.v's own bit-pattern gate (bit2 must be 0; MEGA_ENHANCED_128K has bit2=1).
-			// STEP1/STEP2 entries are mechanically extracted from every place each instruction
-			// appears in this file's own "Set data_addr"/"Set data_out"/"Set data_write"/"Set
-			// data_read" blocks, not guessed -- these alone are enough to stop a same-cycle bus
-			// collision with a pending retirement, and are the load-bearing part of this fix.
-			//
-			// STEP0 entries for these 15 were originally added on top as defense-in-depth (see git
-			// history / PROJECT.md Round 11), NOT because a program-order violation was proven for
-			// these instructions specifically -- tb_out_st_reorder.v passed identically with or
-			// without them from the start. That defense-in-depth was REMOVED 2026-08-14 (Round 16,
-			// Steps 16-19, ported from projects/uzebox/rtl/avr/mega-core.v): full-history
-			// simulation found it was directly responsible for the Uzebox video-interrupt freeze --
-			// STEP0 coverage for exactly these 15 types held an incoming instruction (NOP
-			// substitution, PC frozen, re-checked every cycle) 90,969 times over 4.4M instructions
-			// (100% of all such holds measured; the original 9 instructions above caused zero),
-			// costing ~91,000 excess cycles real hardware (checked directly against uzem, the
-			// community reference emulator) never pays. That excess shifted interrupt-vs-foreground
-			// timing enough to trip a real game-code race condition. This removes NO instruction
-			// support -- LD/ST/PUSH remain fully decoded and executed; only this specific
-			// pre-emptive STEP0 hold is gone. STEP1/STEP2 remain untouched: they are mechanically
-			// derived from every real site each instruction touches the shared bus at, and are the
-			// load-bearing part of this protection -- these are what still prevent the same-cycle
-			// collision Round 9 found. See PROJECT.md Round 16, "Step 19", for the quantification
-			// and PROJECT.md Round 11 for the original defense-in-depth reasoning.
+			// LD/ST/PUSH family: STEP1/STEP2 entries are mechanically derived from every real
+			// site each instruction touches the shared bus at, and are the load-bearing hazard
+			// coverage against a same-cycle collision with a pending OUT retirement. No STEP0
+			// entry -- pre-emptive STEP0 coverage was tried and removed: it held incoming
+			// instructions unnecessarily often, costing real stall cycles hardware never pays and
+			// shifting interrupt-vs-foreground timing enough to trip a real game-code race.
+			// (LDS16/STS16 omitted: gated to MEGA_REDUCED_LDS16_INT, unreachable at this CORE_TYPE.)
 			{`STEP1, `INSTRUCTION_LDD},    {`STEP2, `INSTRUCTION_LDD},
 			{`STEP1, `INSTRUCTION_LDS},    {`STEP2, `INSTRUCTION_LDS},
 			{`STEP1, `INSTRUCTION_LD_X},   {`STEP2, `INSTRUCTION_LD_X},
@@ -376,28 +319,14 @@ function bus_busy_user;
 		endcase
 	end
 endfunction
-// Both plain `reg`s, blocking-assigned early in the main clocked block (right after
-// pgm_data_registered's own update) rather than declared as wires/continuous assignments here --
-// see that assignment site for why.
+// Blocking-assigned early in the clocked block (right after pgm_data_registered's own update),
+// not declared as wires -- see that assignment site.
 reg bus_busy_this_cycle;
 reg out_retire_fire;
 
-// A retiring OUT writes SREG one cycle late relative to its own decode (same reasoning as the
-// data-bus hazard above) -- but unlike the data bus, SREG is read implicitly by nearly the whole
-// ISA: every ALU instruction's flag computation and every conditional branch reads sreg_out, which
-// is combinationally derived from SREG itself (mega_alu_inst's .sreg_in(SREG) port below). That is
-// not a narrow, enumerable hazard list the way the data bus is -- so OUT targeting SREG (I/O 0x3F)
-// always falls back to the original 2-cycle path, unconditionally. Confirmed necessary, not
-// theoretical: caught by fn43/44/45/60-67/t32u4_sp regressing when this was missing.
-//
-// Deliberately NOT a `wire` depending on pgm_data_registered: pgm_data_registered is written by
-// BLOCKING assignment inside this same clocked always block (see "pgm_data_registered = ..." far
-// above), and a `wire` reading it from outside that block's own procedural flow was empirically
-// shown (via inline $display, since first-principles reasoning about this exact class of bug has
-// twice been wrong this session) to read pgm_data_registered's value from ONE EDGE EARLIER, not
-// the freshly-decoded one -- same delta-cycle-lag class as everything else in this investigation.
-// Instead this is inlined directly with pgm_data_registered at each of the three use sites below,
-// matching how out_retire_instr <= pgm_data_registered already reads it correctly.
+// OUT targeting SREG (I/O 0x3F) always falls back to the original 2-cycle path, unconditionally
+// -- SREG is read implicitly by nearly the whole ISA (every ALU flag computation, every
+// conditional branch via sreg_out), so it isn't a narrow, enumerable hazard like the data bus.
 `define OUT_TARGETS_SREG ({pgm_data_registered[10:9],pgm_data_registered[3:0]} == 6'h3F)
 
 int_encoder # (
@@ -433,10 +362,9 @@ begin
 					//if(~|last_state)
 					//begin
 					// Synthetic CALL (0x940E) shares CALL's STEP0/STEP1 datapath, so it needs the
-					// same out_retire_pending/bus_busy_user() hazard check. It must also wait out
-					// holding_instr: a releasing hold has unconditional priority below, so
-					// dispatching here would fire int_registered/int_rst but never latch the
-					// synthetic word -- silently dropping the interrupt instead of stalling it.
+					// same bus hazard check plus ~holding_instr: a releasing hold has priority below
+					// and would otherwise fire int_registered/int_rst without ever latching the
+					// synthetic word -- silently dropping the interrupt.
 					if(~(out_retire_pending & bus_busy_user(`STEP0, 16'b1001010000001110)) & ~holding_instr)
 					begin
 						pgm_data_int = 16'b1001010000001110;
@@ -601,11 +529,7 @@ initial begin
 	PC_TMP_H = 8'h00;
 	call_word2 = 16'h0000;
 	int_rst = 1'b0;
-	// OUT 1-cycle retirement/hazard state, 2026-08-12 -- see
-	// projects/mega-regfile-timing-fix/PROJECT.md Round 7/Round 9. Without this, Icarus starts
-	// these as X (undriven reg) and real Quartus-synthesized silicon would power up to some
-	// unspecified concrete value, since neither simulator nor synthesizer has a defined value to
-	// fall back on without an explicit initial value.
+	// Explicit init avoids X in sim / an undefined power-up value in synthesis.
 	out_retire_pending = 1'b0;
 	out_retire_instr = 16'h0000;
 	out_rs1a = 5'h00;
@@ -631,13 +555,8 @@ begin
 		//io_addr_int <= 6'h00;
 		//io_out_int = 8'h00;
 		//PC_TMP_H <= 8'h00;
-		// OUT 1-cycle retirement/hazard state, 2026-08-12 -- see
-		// projects/mega-regfile-timing-fix/PROJECT.md Round 7/Round 9. Unlike SP/SREG/etc above,
-		// these two are live control state, not data a fresh boot immediately overwrites -- if a
-		// retirement or hold is stuck when a soft reset happens, nothing in software can ever
-		// unstick it, so core_rst (unlike a cold power-up) has to actively clear it. out_retire_
-		// instr/out_rs1a/held_instr don't need clearing here: like SP/data_out_int above, they're
-		// only ever read while one of these two flags is set.
+		// Live control state (unlike SP/SREG/etc above): core_rst must actively clear these on
+		// a soft reset, since nothing in software can unstick a stuck retirement/hold otherwise.
 		out_retire_pending <= 1'b0;
 		holding_instr <= 1'b0;
 	end
@@ -675,24 +594,18 @@ begin
 			end
 			else if(holding_instr)
 			begin
-				// A real instruction is being held (see declaration above) because it collided
-				// with a still-pending OUT retirement when first fetched. Re-check the SAME
-				// conflict against the HELD opcode (not a fresh re-fetch -- that's exactly the
-				// pipeline-lag trap this design avoids) every cycle until it's safe.
+					// Re-check the same conflict against the held opcode (not a re-fetch) every cycle
+					// until it's safe.
 				if(out_retire_pending & bus_busy_user(`STEP0, held_instr))
 				begin
-					// Still blocked: keep presenting NOP (suppresses side effects, same as the
-					// initial detection below) and keep PC frozen -- holding_instr itself is
-					// the "retry" state, no PC re-fetch involved.
+						// Still blocked: present NOP, keep PC frozen.
 					pgm_data_registered = 16'h0000;
 					PC <= PC;
 				end
 				else
 				begin
-					// Clear now: release the held instruction for real execution this cycle.
-					// PC is deliberately left alone here -- it was frozen for the entire hold
-					// and already points at the instruction AFTER this one, so the normal
-					// fetch pipeline resumes correctly on its own from here.
+						// PC is left alone -- it was frozen for the hold and already points past this
+						// instruction, so the normal fetch pipeline resumes on its own.
 					pgm_data_registered = held_instr;
 					holding_instr <= 1'b0;
 				end
@@ -700,20 +613,11 @@ begin
 			else if(&{state_cnt == `STEP0, ~skip_next_clock})
 			begin
 				pgm_data_registered = pgm_data_int;
-				// Read-after-write hazard: a still-pending OUT retirement (out_retire_pending)
-				// writes an I/O address one or more cycles after its own decode (see
-				// out_retire_pending's declaration above). If the instruction that just latched
-				// is itself an I/O-space reader/writer (IN/CBI/SBI/SBIC/SBIS -- the same address
-				// space OUT's retirement targets), letting it proceed now would read/write
-				// stale data, since the pending write hasn't landed yet. Confirmed as a REAL bug,
-				// not theoretical: fn32/fn52 read back a just-written I/O port before a retirement
-				// stuck behind other bus traffic had actually fired, seeing the old value.
-				//
-				// Captures the real opcode into held_instr and starts holding (see that reg's
-				// declaration for why a naive PC-freeze-and-re-fetch is wrong). Reverts
-				// pgm_data_registered to NOP (0x0000, the same "do nothing" value cnt_rst uses
-				// above) so every "Set X" block below naturally no-ops this cycle, and freezes
-				// PC so it doesn't run further ahead while the hold is in effect.
+				// Read-after-write hazard: a pending OUT retirement writes an I/O address one or
+				// more cycles after its own decode. If the instruction just latched is itself an
+				// I/O-space reader/writer (IN/CBI/SBI/SBIC/SBIS), letting it proceed now would
+				// read/write stale data -- so capture it into held_instr, revert pgm_data_registered
+				// to NOP, and freeze PC until the pending write clears.
 				if(out_retire_pending & bus_busy_user(`STEP0, pgm_data_registered))
 				begin
 					held_instr <= pgm_data_registered;
@@ -722,16 +626,8 @@ begin
 					PC <= PC;
 				end
 			end
-			// Computed here (blocking, right after pgm_data_registered's own update) rather
-			// than as a separate always@*/wire: a separate process reading pgm_data_registered
-			// was empirically proven unreliable earlier in this file (see OUT_TARGETS_SREG's own
-			// history) and again here (bus_busy_this_cycle_r's first version had the identical
-			// bug) -- pgm_data_registered is written by BLOCKING assignment inside THIS block,
-			// and anything outside this exact procedural flow sees it one edge late. Blocking
-			// assignment here, immediately after pgm_data_registered's own update and before any
-			// of the "Set X" blocks that consume it, makes every later statement in this same
-			// pass see the correct, freshly-decoded value -- the same reason pgm_data_registered
-			// itself is safe to read directly further down in this block.
+				// Blocking-assigned here (right after pgm_data_registered's own update) so every
+				// later statement in this pass sees the correct, freshly-decoded value.
 			bus_busy_this_cycle = bus_busy_user(state_cnt, pgm_data_registered) | int_registered;
 			out_retire_fire = out_retire_pending & ~bus_busy_this_cycle;
 			unlock_int_registered_step_2 <= 1'b0;
@@ -1088,7 +984,7 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP2, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP1, `INSTRUCTION_ST_XN},
-					{1'b1, `STEP0, `INSTRUCTION_IN}, // IN-only 1-cycle fix (does not read reg_rs1, only writes via rda/reg_rdw -- safe independent of OUT, which stays at its original 2-cycle timing -- see projects/mega-regfile-timing-fix/PROJECT.md)
+					{1'b1, `STEP0, `INSTRUCTION_IN}, // IN-only: doesn't read reg_rs1, only writes via rda/reg_rdw -- independent of OUT's own (still 2-cycle) timing.
 					{1'b1, `STEP1, `INSTRUCTION_LPM_R},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R_P},
 					{1'b1, `STEP1, `INSTRUCTION_LPM_R_P},
@@ -1264,16 +1160,10 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_OUT}: data_out_int <= reg_rs1;
 				endcase
 				// OUT-retire write-back (data value): one cycle after decode.
-				// Non-blocking, unlike the pre-existing CBI_SBI/OUT arms above used to be --
-				// Quartus 17.0 rejects mixing blocking and non-blocking assignment to the same
-				// reg within one always block as a hard error (10110), even though the original
-				// code's single blocking arm here was apparently tolerated. Confirmed by an
-				// actual Quartus compile, not simulation (Icarus never flagged this) -- see
-				// projects/arduboy-out-fix/PROJECT.md. Safe: data_out_int is never read again
-				// within this same clocked block after being set, only by the separate
-				// combinational "Data bus switch" block, so blocking-vs-non-blocking here has no
-				// simulation-visible effect -- confirmed by re-running every existing test after
-				// this change with no regressions.
+				// Non-blocking, unlike the pre-existing CBI_SBI/OUT arms above -- Quartus 17.0
+				// rejects mixing blocking and non-blocking assignment to the same reg in one
+				// always block (error 10110). data_out_int is never read again within this block
+				// after being set, so this has no simulation-visible effect.
 				if(out_retire_fire)
 					data_out_int <= out_reg_rs1;
 	/* Set "data_write" */ /*************************************************************/
@@ -1353,12 +1243,9 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R_P},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_ELPM}: state_cnt <= `STEP1;
-					// OUT stays STEP0 (genuinely 1-cycle) except OUT_TARGETS_SREG, which always
-					// falls back to the original, proven 2-cycle STEP0->STEP1 path. A stalled OUT
-					// (blocked behind a still-pending retirement) ALSO stays at STEP0 -- that's
-					// not a bug, it's the mechanism: pgm_data_registered/rs1a simply re-latch the
-					// same OUT instruction next cycle (harmless, PC hasn't moved) and the
-					// "Set out_retire_pending" block above re-checks whether it can arm yet.
+					// OUT stays STEP0 (1-cycle) except OUT_TARGETS_SREG, which falls back to the
+					// original 2-cycle STEP0->STEP1 path. A stalled OUT (blocked behind a pending
+					// retirement) also stays at STEP0 and simply re-latches next cycle.
 					{1'b1, `STEP0, `INSTRUCTION_OUT}: if(`OUT_TARGETS_SREG) state_cnt <= `STEP1;
 	/*************************************************************/
 					{1'b1, `STEP1, `INSTRUCTION_CALL},
@@ -1420,18 +1307,13 @@ begin
 					{1'b1, `STEP2, `INSTRUCTION_SBIC_SBIS}: state_cnt <= `STEP3;
 				endcase
 	/* Set "out_retire_pending" */ /*************************************************************/
-				// A pending write fires and clears whenever the bus is free, REGARDLESS of what's
-				// decoding this same cycle -- evaluated first so a new OUT arming below (same
-				// cycle, bus free) can immediately re-arm it (last NBA write wins, see the
-				// declaration comment for why exactly one retirement is ever in flight).
+				// A pending write fires whenever the bus is free, regardless of what's decoding this
+				// cycle -- evaluated first so a new OUT arming below can immediately re-arm it.
 				if(out_retire_fire)
 					out_retire_pending <= 1'b0;
-				// Arms a NEW pending write only when safe: not SREG (unconditionally the old
-				// STEP1 mechanism, unrelated to this) and not stalled behind an existing pending
-				// write that isn't clearing this cycle. out_rs1a <= pgm_data_registered[8:4]
-				// mirrors rs1a's own default assignment exactly (same source field, same
-				// timing), but into the dedicated, non-shared register described above -- see
-				// its declaration for why a shared-rs1a capture was tried first and is wrong.
+				// Arms a new pending write only when safe: not SREG (unconditionally the old STEP1
+				// mechanism) and not stalled behind an existing pending write. out_rs1a mirrors
+				// rs1a's own default assignment into the dedicated, non-shared register above.
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP0, `INSTRUCTION_OUT}:
 					begin
@@ -1515,10 +1397,8 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_LPM_R_P},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_ELPM},
 					{1'b1, `STEP1, `INSTRUCTION_LPM_ELPM}: PC <= PC;
-					// OUT freezes PC for OUT_TARGETS_SREG's old mechanism, or while genuinely
-					// stalled (a retirement is pending and the bus is busy this cycle -- see
-					// "Set out_retire_pending" above); otherwise PC advances normally
-					// (PC_PLUS_ONE, set earlier) for genuine 1-cycle throughput.
+					// OUT freezes PC only for OUT_TARGETS_SREG's old path or while genuinely stalled
+					// (a retirement pending and the bus busy this cycle) -- otherwise 1-cycle throughput.
 					{1'b1, `STEP0, `INSTRUCTION_OUT}: if(`OUT_TARGETS_SREG | (out_retire_pending & bus_busy_this_cycle)) PC <= PC;
 				endcase
 			end
