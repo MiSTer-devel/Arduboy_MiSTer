@@ -30,7 +30,11 @@
     input      we,
     input      [ADDR_BUS_WIDTH - 1:0] a,
     input      [DATA_BUS_WIDTH - 1:0] d_in,
-    output reg [DATA_BUS_WIDTH - 1:0] d_out
+    output reg [DATA_BUS_WIDTH - 1:0] d_out,
+    // Second read-only port, RET/RETI's dedicated second stack byte -- lets both pop bytes be
+    // addressed the same cycle instead of serializing through the one read/write port above.
+    input      [ADDR_BUS_WIDTH - 1:0] a2,
+    output reg [DATA_BUS_WIDTH - 1:0] d_out2
 );
 
 reg [DATA_BUS_WIDTH - 1:0] mem [(2**ADDR_BUS_WIDTH)-1:0];
@@ -53,5 +57,6 @@ always @ (posedge clk) begin
 end
 
 always @ (posedge clk) d_out <= mem[a];
+always @ (posedge clk) d_out2 <= mem[a2];
 
 endmodule
