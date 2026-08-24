@@ -103,6 +103,8 @@ module atmega32u4 # (
     output PC6, PC7,
     output PD4,
     output PB1, PB2,
+    input PB3,
+    output PD1, PD6,
     input PD2,
     output PD3
     );
@@ -163,7 +165,6 @@ wire tim3_occ;
 wire tim4_oca;
 wire tim4_ocb;
 wire tim4_ocd;
-wire spi_miso;
 wire usb_ck_out;
 wire tim_ck_out;
 /* !IO ALTERNATIVE FUNCTION */
@@ -184,6 +185,8 @@ assign PB5 = tim1_oca_io_connect ? tim1_oca : ~(pb_out[5]);
 assign PC6 = tim3_oca_io_connect ? tim3_oca : pc_out[6];
 assign PC7 = tim4_ocap_io_connect ? tim4_oca : pc_out[7];
 assign PD4 = pd_out[4];
+assign PD1 = pd_out[1];
+assign PD6 = pd_out[6];
 
 /* Interrupt wires */
 wire ram_sel = |data_addr[`BUS_ADDR_DATA_LEN-1:8];
@@ -499,9 +502,10 @@ atmega_spi_m # (
     .BAUDRATE_CNT_LEN(0),
     .BAUDRATE_DIVIDER(0),
     .USE_TX("TRUE"),
-    .USE_RX("FALSE")
+    .USE_RX("TRUE")
 )spi(
     .rst(rst),
+    .halt(1'b0),
     .clk(clk),
     .addr_dat(data_addr[7:0]),
     .wr_dat(data_write & ~ram_sel),
@@ -514,7 +518,7 @@ atmega_spi_m # (
     .io_conn_slave(io_conn_slave),
 
     .scl(PB1),
-    .miso(spi_miso),
+    .miso(PB3),
     .mosi(PB2)
     );
 end
