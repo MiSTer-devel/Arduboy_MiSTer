@@ -20,8 +20,8 @@ Editor : sublime text3, tab size (2)
 
 module vgaHdmi
 (
-  input clock,     // clk_sys, 40MHz: video timing and framebuffer read
-  input clk_avr,   // 16MHz AVR clock; the domain that generates oled_clk
+  input clock,     // clk_sys, video timing
+  input clk_avr,   // generates oled_clk
   input reset,
   input oled_dc,
   input oled_clk,
@@ -42,12 +42,9 @@ reg  [7:0] shiftReg;
 wire [7:0] shiftLeft = {shiftReg[6:0], oled_data};
 reg  [2:0] pageCount;
 
-// oled_clk is not a real clock -- in atmega_spi_m it's a combinational function of
-// two clk_avr registers (scl = sck_active & sckint), so a routing-skew runt pulse
-// between them could desync shiftCount. Sampled here in clk_avr (the domain that
-// generates it) with rising-edge detection: SPI mode 0 samples on the rising edge,
-// and scl only changes in response to a clk_avr edge, so this captures the same
-// bits one clk_avr cycle later, synchronously.
+// oled_clk is combinational (scl = sck_active & sckint), not a real clock -- sample it
+// in clk_avr and edge-detect instead of clocking off it, to avoid a routing-skew runt
+// pulse desyncing shiftCount.
 reg        oled_clk_d;
 wire       oled_clk_rise = ~oled_clk_d & oled_clk;
 
