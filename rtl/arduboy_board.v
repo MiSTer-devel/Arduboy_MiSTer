@@ -18,6 +18,8 @@ module arduboy_board
     input status,
     output [2:0] RGB,
     output Buzzer1, Buzzer2, DC, spi_scl, spi_mosi,
+    input spi_miso,
+    output oled_cs, cart_cs,
     input uart_rx,
     output uart_tx
     );
@@ -48,6 +50,9 @@ atmega32u4 atmega32u4
     .PD4(DC),
     .PB1(spi_scl),
     .PB2(spi_mosi),
+    .PB3(spi_miso),
+    .PD6(oled_cs),
+    .PD1(cart_cs),
     .PD2(uart_rx),
     .PD3(uart_tx)
     );
