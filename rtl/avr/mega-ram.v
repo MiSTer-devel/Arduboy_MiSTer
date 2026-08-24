@@ -41,7 +41,7 @@ if (RAM_PATH != "")
 end
 
 always @ (posedge clk) begin
-    reg [7:0] clear_cnt = 0;
+    reg [ADDR_BUS_WIDTH - 1:0] clear_cnt = 0;
 
     if (rst) begin
         mem[clear_cnt] <= 0;
