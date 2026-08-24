@@ -20,7 +20,8 @@ Editor : sublime text3, tab size (2)
 
 module vgaHdmi
 (
-  input clock,
+  input clock,     // clk_sys, video timing
+  input clk_avr,   // generates oled_clk
   input reset,
   input oled_dc,
   input oled_clk,
@@ -41,7 +42,15 @@ reg  [7:0] shiftReg;
 wire [7:0] shiftLeft = {shiftReg[6:0], oled_data};
 reg  [2:0] pageCount;
 
-always @ (posedge oled_clk or posedge reset) begin
+// oled_clk is combinational (scl = sck_active & sckint), not a real clock -- sample it
+// in clk_avr and edge-detect instead of clocking off it, to avoid a routing-skew runt
+// pulse desyncing shiftCount.
+reg        oled_clk_d;
+wire       oled_clk_rise = ~oled_clk_d & oled_clk;
+
+always @ (posedge clk_avr) begin
+  oled_clk_d <= oled_clk;
+
   if(reset) begin
     waddr         <= 0;
     invert        <= 0;
@@ -49,7 +58,7 @@ always @ (posedge oled_clk or posedge reset) begin
     shiftReg      <= 0;
     pageCount     <= 0;
   end
-  else begin
+  else if(oled_clk_rise) begin
     if (oled_dc) begin // data
       if (shiftCount == 3'b111) begin
         mem[waddr] <= shiftLeft;
