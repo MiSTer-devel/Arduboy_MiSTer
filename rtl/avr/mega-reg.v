@@ -118,9 +118,6 @@ begin
 	end
 end
 
-// This block is combinational (always @*) but was using non-blocking assignment (<=) for
-// rs1/rs2, adding a spurious extra simulation delta-cycle of lag on top of rs1a/rs2a's own
-// settling time. Changed to blocking (=), the idiomatic form for combinational logic.
 always @ *
 begin
 	if(REGISTERED == "TRUE")
@@ -342,8 +339,7 @@ DPR16X4C REG_H_R_0_3(
 	.DO0(REGHR_out[0])
 );
 	
-// Same non-blocking-in-combinational fix as the XILINX/iCE40UP branch above, for consistency
-// (this LATTICE branch isn't exercised by any core in this workspace, PLATFORM="XILINX").
+// Not exercised by any core in this workspace (PLATFORM="XILINX" throughout).
 always @ *
 begin
 	case({rs1m, rs1a[0]})

@@ -293,12 +293,11 @@ function bus_busy_user;
 			{`STEP0, `INSTRUCTION_IN},
 			{`STEP0, `INSTRUCTION_CBI_SBI},   {`STEP1, `INSTRUCTION_CBI_SBI},
 			{`STEP0, `INSTRUCTION_SBIC_SBIS}, {`STEP1, `INSTRUCTION_SBIC_SBIS},
-			// LD/ST/PUSH family: STEP1/STEP2 entries are mechanically derived from every real
-			// site each instruction touches the shared bus at, and are the load-bearing hazard
-			// coverage against a same-cycle collision with a pending OUT retirement. No STEP0
-			// entry -- pre-emptive STEP0 coverage was tried and removed: it held incoming
-			// instructions unnecessarily often, costing real stall cycles hardware never pays and
-			// shifting interrupt-vs-foreground timing enough to trip a real game-code race.
+			// LD/ST/PUSH family: STEP1/STEP2 entries mark every real site each instruction
+			// touches the shared bus at -- sufficient hazard coverage against a same-cycle
+			// collision with a pending OUT retirement. Deliberately no STEP0 entry: it would
+			// hold incoming instructions on every decode, costing stall cycles and shifting
+			// interrupt-vs-foreground timing enough to trip a race.
 			// (LDS16/STS16 omitted: gated to MEGA_REDUCED_LDS16_INT, unreachable at this CORE_TYPE.)
 			{`STEP1, `INSTRUCTION_LDD},    {`STEP2, `INSTRUCTION_LDD},
 			{`STEP1, `INSTRUCTION_LDS},    {`STEP2, `INSTRUCTION_LDS},
@@ -324,9 +323,9 @@ endfunction
 reg bus_busy_this_cycle;
 reg out_retire_fire;
 
-// OUT targeting SREG (I/O 0x3F) always falls back to the original 2-cycle path, unconditionally
-// -- SREG is read implicitly by nearly the whole ISA (every ALU flag computation, every
-// conditional branch via sreg_out), so it isn't a narrow, enumerable hazard like the data bus.
+// OUT targeting SREG (I/O 0x3F) always uses the 2-cycle path, unconditionally -- SREG is read
+// implicitly by nearly the whole ISA (every ALU flag computation, every conditional branch via
+// sreg_out), so it isn't a narrow, enumerable hazard like the data bus.
 `define OUT_TARGETS_SREG ({pgm_data_registered[10:9],pgm_data_registered[3:0]} == 6'h3F)
 
 int_encoder # (
@@ -604,8 +603,8 @@ begin
 				end
 				else
 				begin
-						// PC is left alone -- it was frozen for the hold and already points past this
-						// instruction, so the normal fetch pipeline resumes on its own.
+						// PC is left alone -- already points past this instruction, so the normal
+						// fetch pipeline resumes on its own.
 					pgm_data_registered = held_instr;
 					holding_instr <= 1'b0;
 				end
@@ -1160,10 +1159,8 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_OUT}: data_out_int <= reg_rs1;
 				endcase
 				// OUT-retire write-back (data value): one cycle after decode.
-				// Non-blocking, unlike the pre-existing CBI_SBI/OUT arms above -- Quartus 17.0
-				// rejects mixing blocking and non-blocking assignment to the same reg in one
-				// always block (error 10110). data_out_int is never read again within this block
-				// after being set, so this has no simulation-visible effect.
+				// Must stay non-blocking: Quartus 17.0 rejects mixing blocking and non-blocking
+				// assignment to the same reg within one always block (error 10110).
 				if(out_retire_fire)
 					data_out_int <= out_reg_rs1;
 	/* Set "data_write" */ /*************************************************************/
@@ -1236,15 +1233,13 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_ST_XP},
 					{1'b1, `STEP0, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XN},
-					// OUT removed from this unconditional list -- now conditional, see below.
-					// IN removed from this list -- IN-only 1-cycle fix
 					{1'b1, `STEP0, `INSTRUCTION_CBI_SBI},
 					{1'b1, `STEP0, `INSTRUCTION_SBIC_SBIS},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R_P},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_ELPM}: state_cnt <= `STEP1;
-					// OUT stays STEP0 (1-cycle) except OUT_TARGETS_SREG, which falls back to the
-					// original 2-cycle STEP0->STEP1 path. A stalled OUT (blocked behind a pending
+					// OUT stays STEP0 (1-cycle) except OUT_TARGETS_SREG, which always uses the
+					// 2-cycle STEP0->STEP1 path. A stalled OUT (blocked behind a pending
 					// retirement) also stays at STEP0 and simply re-latches next cycle.
 					{1'b1, `STEP0, `INSTRUCTION_OUT}: if(`OUT_TARGETS_SREG) state_cnt <= `STEP1;
 	/*************************************************************/
@@ -1311,8 +1306,8 @@ begin
 				// cycle -- evaluated first so a new OUT arming below can immediately re-arm it.
 				if(out_retire_fire)
 					out_retire_pending <= 1'b0;
-				// Arms a new pending write only when safe: not SREG (unconditionally the old STEP1
-				// mechanism) and not stalled behind an existing pending write. out_rs1a mirrors
+				// Arms a new pending write only when safe: not SREG (unconditionally the STEP1
+				// path above) and not stalled behind an existing pending write. out_rs1a mirrors
 				// rs1a's own default assignment into the dedicated, non-shared register above.
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP0, `INSTRUCTION_OUT}:
@@ -1387,8 +1382,6 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XN},
 					{1'b1, `STEP1, `INSTRUCTION_ST_XN},
-					// OUT removed from this unconditional freeze list -- now conditional, see below.
-					// IN removed from this PC-freeze list too -- IN-only 1-cycle fix
 					{1'b1, `STEP0, `INSTRUCTION_CBI_SBI},
 					{1'b1, `STEP0, `INSTRUCTION_SBIC_SBIS},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R},
