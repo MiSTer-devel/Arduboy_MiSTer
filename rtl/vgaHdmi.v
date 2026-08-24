@@ -42,15 +42,12 @@ reg  [7:0] shiftReg;
 wire [7:0] shiftLeft = {shiftReg[6:0], oled_data};
 reg  [2:0] pageCount;
 
-// oled_clk is not a real clock. In atmega_spi_m it is a combinational function
-// of two clk_avr registers (scl = sck_active & sckint), so clocking this block
-// off it leaves the whole display write path outside timing analysis and exposes
-// it to runt pulses from routing skew between those two registers -- and one
-// spurious edge desyncs shiftCount permanently, shifting the picture until reset.
-// Sample it in clk_avr, the domain that generates it, and detect the rising edge:
-// SPI mode 0 clocks data in on the rising edge, and scl only ever changes in
-// response to a clk_avr edge, so this captures exactly the same bits one clk_avr
-// cycle later. reset is generated in clk_avr too, so it is synchronous here now.
+// oled_clk is not a real clock -- in atmega_spi_m it's a combinational function of
+// two clk_avr registers (scl = sck_active & sckint), so a routing-skew runt pulse
+// between them could desync shiftCount. Sampled here in clk_avr (the domain that
+// generates it) with rising-edge detection: SPI mode 0 samples on the rising edge,
+// and scl only changes in response to a clk_avr edge, so this captures the same
+// bits one clk_avr cycle later, synchronously.
 reg        oled_clk_d;
 wire       oled_clk_rise = ~oled_clk_d & oled_clk;
 
