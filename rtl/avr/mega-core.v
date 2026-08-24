@@ -171,6 +171,11 @@ module mega #(
 	output reg data_write,
 	input [7:0]data_in,
 	output reg data_read,
+	// Dedicated second RAM read port, RET/RETI only -- lets the two stack-pop bytes be
+	// addressed the same cycle instead of serially sharing the data_addr/data_in bus. Never
+	// targets I/O space, so (unlike data_in_int) needs no address-mapped-register mux.
+	output reg [RAM_ADDR_WIDTH - 1:0]data_addr2,
+	input [7:0]data_in2,
 	input [(VECTOR_INT_TABLE_SIZE == 0 ? 0 : VECTOR_INT_TABLE_SIZE - 1):0]int_sig,
 	output reg [(VECTOR_INT_TABLE_SIZE == 0 ? 0 : VECTOR_INT_TABLE_SIZE - 1):0]int_rst
     );
@@ -180,6 +185,7 @@ wire core_rst;
 assign sys_rst_out = core_rst;
 
 reg [RAM_ADDR_WIDTH - 1:0]data_addr_int;
+reg [RAM_ADDR_WIDTH - 1:0]data_addr2_int;
 reg [7:0]data_out_int;
 reg data_write_int;
 reg [7:0]data_in_int;
@@ -251,6 +257,7 @@ reg [15:0]call_word2;
 wire [ROM_ADDR_WIDTH - 1:0]PC_PLUS_ONE = PC + 1;
 wire [ROM_ADDR_WIDTH - 1:0]PC_MINUS_ONE = PC - 1;
 wire [RAM_ADDR_WIDTH - 1:0]SP_PLUS_ONE = SP + 1;
+wire [RAM_ADDR_WIDTH - 1:0]SP_PLUS_TWO = SP + 2;
 reg [ROM_ADDR_WIDTH - 1:0]PC_PLUS_RJMP_RCALL;
 reg [ROM_ADDR_WIDTH - 1:0]PC_PLUS_COND_BRANCH;
 
@@ -287,8 +294,8 @@ function bus_busy_user;
 			{`STEP0, `INSTRUCTION_RCALL}, {`STEP1, `INSTRUCTION_RCALL},
 			{`STEP0, `INSTRUCTION_CALL},  {`STEP1, `INSTRUCTION_CALL},
 			{`STEP0, `INSTRUCTION_ICALL}, {`STEP1, `INSTRUCTION_ICALL},
-			{`STEP0, `INSTRUCTION_RET},   {`STEP1, `INSTRUCTION_RET},   {`STEP2, `INSTRUCTION_RET},
-			{`STEP0, `INSTRUCTION_RETI},  {`STEP1, `INSTRUCTION_RETI},  {`STEP2, `INSTRUCTION_RETI},
+			{`STEP0, `INSTRUCTION_RET},   {`STEP1, `INSTRUCTION_RET},
+			{`STEP0, `INSTRUCTION_RETI},  {`STEP1, `INSTRUCTION_RETI},
 			{`STEP0, `INSTRUCTION_POP},   {`STEP1, `INSTRUCTION_POP},
 			{`STEP0, `INSTRUCTION_IN},
 			{`STEP0, `INSTRUCTION_CBI_SBI},   {`STEP1, `INSTRUCTION_CBI_SBI},
@@ -433,6 +440,7 @@ begin
 	alu_rs2 = reg_rs2;
 /* Data bus switch */ /*************************************************************/
 	data_addr = data_addr_int;
+	data_addr2 = data_addr2_int;
 	data_out = data_out_int;
 	data_write = data_write_int;
 	data_read = data_read_int;
@@ -524,6 +532,7 @@ initial begin
 	SP = 8'h00;
 	SREG = 8'h00;
 	data_addr_int = 'h00000000;
+	data_addr2_int = 'h00000000;
 	data_out_int = 8'h00;
 	PC_TMP_H = 8'h00;
 	call_word2 = 16'h0000;
@@ -666,8 +675,8 @@ begin
 							24'h05F: SREG <= reg_rs1;
 						endcase
 					end
-					{1'b1, `STEP3, `INSTRUCTION_RET},
-					{1'b1, `STEP3, `INSTRUCTION_RETI}:
+					{1'b1, `STEP2, `INSTRUCTION_RET},
+					{1'b1, `STEP2, `INSTRUCTION_RETI}:
 					begin
 						if(pgm_data_registered[4])
 							SREG[`XMEGA_FLAG_I] <= 1'b1;
@@ -698,11 +707,9 @@ begin
 				{1'b1, `STEP0, `INSTRUCTION_ICALL},
 				{1'b1, `STEP1, `INSTRUCTION_ICALL},
 				{1'b1, `STEP1, `INSTRUCTION_PUSH}: SP <= SP - 1;
-				{1'b1, `STEP0, `INSTRUCTION_RET},
-				{1'b1, `STEP0, `INSTRUCTION_RETI},
-				{1'b1, `STEP1, `INSTRUCTION_RET},
-				{1'b1, `STEP1, `INSTRUCTION_RETI},
 				{1'b1, `STEP0, `INSTRUCTION_POP}: SP <= SP_PLUS_ONE;
+				{1'b1, `STEP0, `INSTRUCTION_RET},
+				{1'b1, `STEP0, `INSTRUCTION_RETI}: SP <= SP_PLUS_TWO;
 				{1'b1, `STEP1, `INSTRUCTION_STS}:
 				begin
 					case(pgm_data_int)
@@ -882,8 +889,8 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_RCALL},
 					{1'b1, `STEP1, `INSTRUCTION_ICALL},
 					{1'b1, `STEP2, `INSTRUCTION_CALL},
-					{1'b1, `STEP3, `INSTRUCTION_RET},
-					{1'b1, `STEP3, `INSTRUCTION_RETI}: skip_next_clock <= 1'b1;
+					{1'b1, `STEP2, `INSTRUCTION_RET},
+					{1'b1, `STEP2, `INSTRUCTION_RETI}: skip_next_clock <= 1'b1;
 				endcase
 	/* Set "rda" */ /*************************************************************/
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
@@ -999,11 +1006,7 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_ICALL},
 					{1'b1, `STEP1, `INSTRUCTION_PUSH}: data_addr_int <= SP;
 					{1'b1, `STEP0, `INSTRUCTION_RET},
-					{1'b1, `STEP0, `INSTRUCTION_RETI},
-					{1'b1, `STEP1, `INSTRUCTION_RET},
-					{1'b1, `STEP1, `INSTRUCTION_RETI}: data_addr_int <= SP_PLUS_ONE;
-					{1'b1, `STEP2, `INSTRUCTION_RET},
-					{1'b1, `STEP2, `INSTRUCTION_RETI}: data_addr_int <= SP;
+					{1'b1, `STEP0, `INSTRUCTION_RETI}: data_addr_int <= SP_PLUS_ONE;
 					{1'b1, `STEP0, `INSTRUCTION_POP}: data_addr_int <= SP_PLUS_ONE;
 					{1'b1, `STEP1, `INSTRUCTION_POP}: data_addr_int <= SP;
 					{1'b1, `STEP1, `INSTRUCTION_LDS}: 
@@ -1127,6 +1130,11 @@ begin
 				// OUT-retire write-back (I/O address): one cycle after decode.
 				if(out_retire_fire)
 					data_addr_int <= {out_retire_instr[10:9],out_retire_instr[3:0]} + 'h20;
+	/* Set "data_addr2" */ /*************************************************************/
+				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
+					{1'b1, `STEP0, `INSTRUCTION_RET},
+					{1'b1, `STEP0, `INSTRUCTION_RETI}: data_addr2_int <= SP_PLUS_TWO;
+				endcase
 	/* Set "data_out" */ /*************************************************************/
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP0, `INSTRUCTION_RCALL}: data_out_int <= PC;
@@ -1190,8 +1198,6 @@ begin
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP1, `INSTRUCTION_RET},
 					{1'b1, `STEP1, `INSTRUCTION_RETI},
-					{1'b1, `STEP2, `INSTRUCTION_RET},
-					{1'b1, `STEP2, `INSTRUCTION_RETI},
 					{1'b1, `STEP1, `INSTRUCTION_POP},
 					{1'b1, `STEP1, `INSTRUCTION_LDS16},
 					{1'b1, `STEP2, `INSTRUCTION_LDD},
@@ -1295,8 +1301,6 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_LPM_R_P},
 					{1'b1, `STEP1, `INSTRUCTION_LPM_ELPM}: state_cnt <= `STEP2;
 	/*************************************************************/
-					{1'b1, `STEP2, `INSTRUCTION_RET},
-					{1'b1, `STEP2, `INSTRUCTION_RETI},
 					{1'b1, `STEP2, `INSTRUCTION_CPSE},
 					{1'b1, `STEP2, `INSTRUCTION_SBRC_SBRS},
 					{1'b1, `STEP2, `INSTRUCTION_SBIC_SBIS}: state_cnt <= `STEP3;
@@ -1330,8 +1334,6 @@ begin
 					end
 					{1'b1, `STEP0, `INSTRUCTION_ICALL}: PC_TMP_H <= PC[ROM_ADDR_WIDTH - 1:8];
 					{1'b1, `STEP1, `INSTRUCTION_CALL}: call_word2 <= pgm_data_int;
-					{1'b1, `STEP2, `INSTRUCTION_RET},
-					{1'b1, `STEP2, `INSTRUCTION_RETI}: PC_TMP_H <= data_in_int;
 				endcase
 	/* Set "PC" */ /*************************************************************/
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
@@ -1352,11 +1354,12 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_RET},
 					{1'b1, `STEP0, `INSTRUCTION_RETI},
 					{1'b1, `STEP1, `INSTRUCTION_RET},
-					{1'b1, `STEP1, `INSTRUCTION_RETI},
-					{1'b1, `STEP2, `INSTRUCTION_RET},
-					{1'b1, `STEP2, `INSTRUCTION_RETI}: PC <= PC;
-					{1'b1, `STEP3, `INSTRUCTION_RET}: PC <= {PC_TMP_H, data_in_int};
-					{1'b1, `STEP3, `INSTRUCTION_RETI}: PC <= {PC_TMP_H, data_in_int} - 1;
+					{1'b1, `STEP1, `INSTRUCTION_RETI}: PC <= PC;
+					// Both stack bytes land the same cycle (data_addr2/data_in2 are RET/RETI's
+					// own dedicated port, presented in parallel with data_addr/data_in) --
+					// data_in_int is the high byte (addr SP+1), data_in2 the low byte (SP+2).
+					{1'b1, `STEP2, `INSTRUCTION_RET}: PC <= {data_in_int, data_in2};
+					{1'b1, `STEP2, `INSTRUCTION_RETI}: PC <= {data_in_int, data_in2} - 1;
 					{1'b1, `STEP0, `INSTRUCTION_CPSE},
 					{1'b1, `STEP0, `INSTRUCTION_SBRC_SBRS},
 					{1'b1, `STEP0, `INSTRUCTION_POP},

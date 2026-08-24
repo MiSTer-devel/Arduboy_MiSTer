@@ -895,6 +895,8 @@ endgenerate
 
 /* RAM */
 wire [7:0]ram_bus_out;
+wire [7:0]ram_bus_out2;
+wire [`RAM_ADDR_WIDTH-1:0]data_addr2;
 mega_ram  #(
     .ADDR_BUS_WIDTH(`RAM_ADDR_WIDTH),
     .DATA_BUS_WIDTH(8),
@@ -905,7 +907,11 @@ mega_ram  #(
     .we(data_write & ram_sel),
     .a(data_addr[`RAM_ADDR_WIDTH-1:0]/* - `RESERVED_RAM_FOR_IO*/),
     .d_in(core_data_out),
-    .d_out(ram_bus_out)
+    .d_out(ram_bus_out),
+    // Second read-only port, RET/RETI only (mega-core.v's data_addr2/data_in2) -- lets both
+    // stack-pop bytes be addressed the same cycle instead of serially sharing this port.
+    .a2(data_addr2),
+    .d_out2(ram_bus_out2)
 );
 /* !RAM */
 
@@ -974,6 +980,9 @@ mega # (
     .data_write(data_write),
     .data_in(core_data_in),
     .data_read(data_read),
+    // Dedicated second RAM read port, RET/RETI only -- see the `ram` instance above.
+    .data_addr2(data_addr2),
+    .data_in2(ram_bus_out2),
     // Interrupt lines from all IO's.
     .int_sig({
     int_timer4_fpf, int_timer4_ovf, int_timer4_compd, int_timer4_compb, int_timer4_compa,
