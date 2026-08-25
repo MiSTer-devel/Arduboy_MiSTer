@@ -36,8 +36,13 @@ assign HDMI_BLACKOUT = 0;
 assign HDMI_BOB_DEINT = 0;
 assign FB_FORCE_BLANK = 0;
 
-assign AUDIO_S     = 0;
-assign AUDIO_L     = {1'b0,{15{Buzzer1}}} + {1'b0,{15{Buzzer2}}};
+// Speaker is wired across Buzzer1/Buzzer2 with no ground reference (SPEAKER+/SPEAKER-) --
+// a two-terminal load responds only to the voltage difference between its terminals, so the
+// mix must be differential, not additive: same-state pins (00/11) produce silence, opposite
+// states produce a full-scale swing of the correct polarity. AUDIO_S=1 (signed) avoids the
+// unsigned bit-flip that would otherwise crush that swing to a couple of LSBs.
+assign AUDIO_S     = 1;
+assign AUDIO_L     = (Buzzer1 == Buzzer2) ? 16'sd0 : (Buzzer1 ? 16'sd32767 : -16'sd32767);
 assign AUDIO_R     = AUDIO_L;
 assign AUDIO_MIX   = 0;
 
