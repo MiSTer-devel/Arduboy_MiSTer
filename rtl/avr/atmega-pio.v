@@ -51,12 +51,8 @@ module atmega_pio # (
 reg [7:0]DDR;
 reg [7:0]PORT;
 
-// Per the ATmega32U4/644 datasheet, Table 10-1: DDR=1 drives PORT directly (Output Low/High);
-// DDR=0/PORT=1 is not floating either -- the internal pull-up sources current, which reads the
-// same as driven-high to anything downstream that isn't itself driving the pin low. Gating on
-// DDR here (forcing 0 whenever DDR=0) silently drops that pull-up drive -- the real bug behind
-// Tiny Trick's missing sound, which drives its speaker via PORTC writes with DDRC left at 0, a
-// real datasheet-documented technique (10.2.1), not a game bug.
+// DDR=1 drives PORT directly; DDR=0/PORT=1 sources the internal pull-up, which reads the same
+// as driven-high downstream (ATmega32U4/644 datasheet Table 10-1).
 assign io_out[0] = PORT[0];
 assign io_out[1] = PORT[1];
 assign io_out[2] = PORT[2];
