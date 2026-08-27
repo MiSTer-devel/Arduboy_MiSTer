@@ -51,14 +51,16 @@ module atmega_pio # (
 reg [7:0]DDR;
 reg [7:0]PORT;
 
-assign io_out[0] = DDR[0] ? PORT[0] : 1'b0;
-assign io_out[1] = DDR[1] ? PORT[1] : 1'b0;
-assign io_out[2] = DDR[2] ? PORT[2] : 1'b0;
-assign io_out[3] = DDR[3] ? PORT[3] : 1'b0;
-assign io_out[4] = DDR[4] ? PORT[4] : 1'b0;
-assign io_out[5] = DDR[5] ? PORT[5] : 1'b0;
-assign io_out[6] = DDR[6] ? PORT[6] : 1'b0;
-assign io_out[7] = DDR[7] ? PORT[7] : 1'b0;
+// DDR=1 drives PORT directly; DDR=0/PORT=1 sources the internal pull-up, which reads the same
+// as driven-high downstream (ATmega32U4/644 datasheet Table 10-1).
+assign io_out[0] = PORT[0];
+assign io_out[1] = PORT[1];
+assign io_out[2] = PORT[2];
+assign io_out[3] = PORT[3];
+assign io_out[4] = PORT[4];
+assign io_out[5] = PORT[5];
+assign io_out[6] = PORT[6];
+assign io_out[7] = PORT[7];
 
 always @ (posedge rst or posedge clk)
 begin
