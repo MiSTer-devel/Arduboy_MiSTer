@@ -232,11 +232,7 @@ wire [15:0]out_reg_rs1;
 reg holding_instr;
 reg [15:0]held_instr;
 
-// Arms for exactly one cycle after a 2-cycle arithmetic instruction decodes, unconditionally
-// (not a hazard check). Reuses holding_instr/held_instr's own capture-and-replay mechanism (see
-// the comment above) to delay the *next* instruction's own decode by one cycle -- the arming
-// instruction's own decode, register write, and flag computation are completely untouched,
-// still the same proven 1-cycle path.
+// Set for one cycle after a 2-cycle arithmetic op decodes; unconditional, not a hazard check.
 reg two_cycle_hold_next;
 
 reg [15:0]alu_rs1;
@@ -643,24 +639,12 @@ begin
 					pgm_data_registered = 16'h0000;
 					PC <= PC;
 				end
-				// ADIW/SBIW and the whole MUL family are 2 cycles per the AVR ISA Manual (Table
-				// 5-2, and each instruction's own Cycles table -- e.g. Table 6-77 for MUL), not 1.
-				// Giving them their own extra state_cnt state would delay pgm_data_registered's
-				// advance, breaking the "ALU output is one decode behind" timing that every
-				// 1-cycle flag-writing instruction's write-back and the COND_BRANCH decision both
-				// rely on. So hold the *next* instruction for one cycle instead, via the same
-				// capture-and-replay mechanism as the out-hazard above. The arming instruction's
-				// own decode, register write, and flag computation are completely unaffected.
-				//
-				// ~int_registered is load-bearing: if an interrupt dispatches on the exact cycle
-				// right after the arming instruction, pgm_data_registered here is the synthetic
-				// CALL word (0x940e), not a real instruction -- capturing and delaying *that*
-				// corrupts the interrupt's own multi-word dispatch sequence, landing PC at a
-				// garbage address instead of the real vector target. The existing out-hazard check
-				// above is naturally immune (bus_busy_user() never matches the synthetic word), but
-				// this unconditional trigger needs the explicit guard. Stepping aside here costs
-				// one cycle of the arming instruction's own timing accuracy in that rare collision
-				// window only -- far preferable to corrupting the interrupt.
+				// ADIW/SBIW and the MUL family are 2 cycles (ISM Table 5-2). An extra state_cnt
+				// state would delay pgm_data_registered and break the one-decode-behind ALU timing
+				// that 1-cycle flag write-back and COND_BRANCH depend on, so hold the next
+				// instruction instead. ~int_registered: on an interrupt dispatch cycle
+				// pgm_data_registered is the synthetic CALL (0x940e), and holding that corrupts the
+				// vector fetch.
 				else if(two_cycle_hold_next & ~int_registered)
 				begin
 					held_instr <= pgm_data_registered;
