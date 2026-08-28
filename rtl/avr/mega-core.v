@@ -645,25 +645,22 @@ begin
 				end
 				// ADIW/SBIW and the whole MUL family are 2 cycles per the AVR ISA Manual (Table
 				// 5-2, and each instruction's own Cycles table -- e.g. Table 6-77 for MUL), not 1.
-				// Rather than giving them their own extra state_cnt state (which would delay
-				// pgm_data_registered's own advance and break the same "ALU output is one decode
-				// behind" timing every 1-cycle flag-writing instruction's write-back and the
-				// COND_BRANCH decision both rely on -- confirmed by direct trace, see
-				// mega-regfile-timing-fix/PROJECT.md Round 38/39), hold the *next* instruction for
-				// one cycle instead, via the same capture-and-replay mechanism as the out-hazard
-				// above. The arming instruction's own decode, register write, and flag computation
-				// are completely unaffected.
+				// Giving them their own extra state_cnt state would delay pgm_data_registered's
+				// advance, breaking the "ALU output is one decode behind" timing that every
+				// 1-cycle flag-writing instruction's write-back and the COND_BRANCH decision both
+				// rely on. So hold the *next* instruction for one cycle instead, via the same
+				// capture-and-replay mechanism as the out-hazard above. The arming instruction's
+				// own decode, register write, and flag computation are completely unaffected.
 				//
-				// ~int_registered guards against a real bug found by direct simulation (Round 39
-				// interrupt-collision test): if an interrupt dispatches on the exact cycle right
-				// after the arming instruction, pgm_data_registered here is the synthetic CALL word
-				// (0x940e), not a real instruction -- capturing and delaying *that* corrupts the
-				// interrupt's own multi-word dispatch sequence (confirmed: PC ended up at a garbage
-				// address instead of the real vector target). The existing out-hazard check above is
-				// naturally immune to this (bus_busy_user() never matches the synthetic word), but
-				// this new, unconditional trigger needs the explicit guard. Stepping aside here
-				// costs one cycle of the arming instruction's own timing accuracy only in this rare
-				// exact collision window -- far preferable to corrupting the interrupt.
+				// ~int_registered is load-bearing: if an interrupt dispatches on the exact cycle
+				// right after the arming instruction, pgm_data_registered here is the synthetic
+				// CALL word (0x940e), not a real instruction -- capturing and delaying *that*
+				// corrupts the interrupt's own multi-word dispatch sequence, landing PC at a
+				// garbage address instead of the real vector target. The existing out-hazard check
+				// above is naturally immune (bus_busy_user() never matches the synthetic word), but
+				// this unconditional trigger needs the explicit guard. Stepping aside here costs
+				// one cycle of the arming instruction's own timing accuracy in that rare collision
+				// window only -- far preferable to corrupting the interrupt.
 				else if(two_cycle_hold_next & ~int_registered)
 				begin
 					held_instr <= pgm_data_registered;
