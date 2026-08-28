@@ -232,6 +232,9 @@ wire [15:0]out_reg_rs1;
 reg holding_instr;
 reg [15:0]held_instr;
 
+// Set for one cycle after a 2-cycle arithmetic op decodes; unconditional, not a hazard check.
+reg two_cycle_hold_next;
+
 reg [15:0]alu_rs1;
 reg [15:0]alu_rs2;
 wire [15:0]alu_rd;
@@ -543,6 +546,7 @@ initial begin
 	out_rs1a = 5'h00;
 	held_instr = 16'h0000;
 	holding_instr = 1'b0;
+	two_cycle_hold_next = 1'b0;
 end
 
 reg halt_ack_n;
@@ -567,6 +571,7 @@ begin
 		// a soft reset, since nothing in software can unstick a stuck retirement/hold otherwise.
 		out_retire_pending <= 1'b0;
 		holding_instr <= 1'b0;
+		two_cycle_hold_next <= 1'b0;
 	end
 	else
 	begin
@@ -575,6 +580,7 @@ begin
 		data_read_int <= 1'b0;
 		reg_rdw <= 1'b0;
 		skip_next_clock <= 1'b0;
+		two_cycle_hold_next <= 1'b0;
 		if(&{USE_HALT == "TRUE", halt_int, state_cnt == `STEP0, ~skip_next_clock, ~int_registered})
 		begin
 			halt_ack <= 1'b1;
@@ -633,6 +639,29 @@ begin
 					pgm_data_registered = 16'h0000;
 					PC <= PC;
 				end
+				// ADIW/SBIW and the MUL family are 2 cycles (ISM Table 5-2). An extra state_cnt
+				// state would delay pgm_data_registered and break the one-decode-behind ALU timing
+				// that 1-cycle flag write-back and COND_BRANCH depend on, so hold the next
+				// instruction instead. ~int_registered: on an interrupt dispatch cycle
+				// pgm_data_registered is the synthetic CALL (0x940e), and holding that corrupts the
+				// vector fetch.
+				else if(two_cycle_hold_next & ~int_registered)
+				begin
+					held_instr <= pgm_data_registered;
+					holding_instr <= 1'b1;
+					pgm_data_registered = 16'h0000;
+					PC <= PC;
+				end
+				casex({CORE_TYPE, pgm_data_registered})
+					`INSTRUCTION_ADIW,
+					`INSTRUCTION_SBIW,
+					`INSTRUCTION_MUL,
+					`INSTRUCTION_MULS,
+					`INSTRUCTION_MULSU,
+					`INSTRUCTION_FMUL,
+					`INSTRUCTION_FMULS,
+					`INSTRUCTION_FMULSU: two_cycle_hold_next <= 1'b1;
+				endcase
 			end
 				// Blocking-assigned here (right after pgm_data_registered's own update) so every
 				// later statement in this pass sees the correct, freshly-decoded value.
