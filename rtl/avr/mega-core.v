@@ -232,6 +232,12 @@ wire [15:0]out_reg_rs1;
 reg holding_instr;
 reg [15:0]held_instr;
 
+// Arms for exactly one cycle after ADIW/SBIW decodes, unconditionally (not a hazard check).
+// Reuses holding_instr/held_instr's own capture-and-replay mechanism (see the comment above)
+// to delay the *next* instruction's own decode by one cycle -- ADIW/SBIW's own decode, register
+// write, and flag computation are completely untouched, still the same proven 1-cycle path.
+reg adiw_hold_next;
+
 reg [15:0]alu_rs1;
 reg [15:0]alu_rs2;
 wire [15:0]alu_rd;
@@ -543,6 +549,7 @@ initial begin
 	out_rs1a = 5'h00;
 	held_instr = 16'h0000;
 	holding_instr = 1'b0;
+	adiw_hold_next = 1'b0;
 end
 
 reg halt_ack_n;
@@ -567,6 +574,7 @@ begin
 		// a soft reset, since nothing in software can unstick a stuck retirement/hold otherwise.
 		out_retire_pending <= 1'b0;
 		holding_instr <= 1'b0;
+		adiw_hold_next <= 1'b0;
 	end
 	else
 	begin
@@ -575,6 +583,7 @@ begin
 		data_read_int <= 1'b0;
 		reg_rdw <= 1'b0;
 		skip_next_clock <= 1'b0;
+		adiw_hold_next <= 1'b0;
 		if(&{USE_HALT == "TRUE", halt_int, state_cnt == `STEP0, ~skip_next_clock, ~int_registered})
 		begin
 			halt_ack <= 1'b1;
@@ -633,6 +642,36 @@ begin
 					pgm_data_registered = 16'h0000;
 					PC <= PC;
 				end
+				// ADIW/SBIW are 2 cycles per the AVR ISA Manual (Table 5-2), not 1. Rather than
+				// giving ADIW/SBIW their own extra state_cnt state (which would delay pgm_data_
+				// registered's own advance and break the same "ALU output is one decode behind"
+				// timing every 1-cycle flag-writing instruction's write-back and the COND_BRANCH
+				// decision both rely on -- confirmed by direct trace, see mega-regfile-timing-fix/
+				// PROJECT.md Round 38/39), hold the *next* instruction for one cycle instead, via
+				// the same capture-and-replay mechanism as the out-hazard above. ADIW/SBIW's own
+				// decode, register write, and flag computation are completely unaffected.
+				//
+				// ~int_registered guards against a real bug found by direct simulation (Round 39
+				// interrupt-collision test): if an interrupt dispatches on the exact cycle right
+				// after ADIW/SBIW, pgm_data_registered here is the synthetic CALL word (0x940e),
+				// not a real instruction -- capturing and delaying *that* corrupts the interrupt's
+				// own multi-word dispatch sequence (confirmed: PC ended up at a garbage address
+				// instead of the real vector target). The existing out-hazard check above is
+				// naturally immune to this (bus_busy_user() never matches the synthetic word), but
+				// this new, unconditional trigger needs the explicit guard. Stepping aside here
+				// costs one cycle of ADIW/SBIW's own timing accuracy only in this rare exact
+				// collision window -- far preferable to corrupting the interrupt.
+				else if(adiw_hold_next & ~int_registered)
+				begin
+					held_instr <= pgm_data_registered;
+					holding_instr <= 1'b1;
+					pgm_data_registered = 16'h0000;
+					PC <= PC;
+				end
+				casex({CORE_TYPE, pgm_data_registered})
+					`INSTRUCTION_ADIW,
+					`INSTRUCTION_SBIW: adiw_hold_next <= 1'b1;
+				endcase
 			end
 				// Blocking-assigned here (right after pgm_data_registered's own update) so every
 				// later statement in this pass sees the correct, freshly-decoded value.
