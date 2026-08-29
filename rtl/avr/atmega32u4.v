@@ -903,7 +903,10 @@ mega_ram  #(
     .RAM_PATH("")
 )ram(
     .rst(rst),
-    .clk(core_clk),
+    // Falling-edge clocked: the address is presented on the rising edge and the data is back
+    // half a cycle later, in time for the register write on the next rising edge. This is what
+    // lets LD retire in the 2 cycles the ISA manual specifies instead of 3.
+    .clk(~core_clk),
     .we(data_write & ram_sel),
     .a(data_addr[`RAM_ADDR_WIDTH-1:0]/* - `RESERVED_RAM_FOR_IO*/),
     .d_in(core_data_out),

@@ -309,13 +309,13 @@ function bus_busy_user;
 			// hold incoming instructions on every decode, costing stall cycles and shifting
 			// interrupt-vs-foreground timing enough to trip a race.
 			// (LDS16/STS16 omitted: gated to MEGA_REDUCED_LDS16_INT, unreachable at this CORE_TYPE.)
-			{`STEP1, `INSTRUCTION_LDD},    {`STEP2, `INSTRUCTION_LDD},
+			{`STEP1, `INSTRUCTION_LDD},
 			{`STEP1, `INSTRUCTION_LDS},    {`STEP2, `INSTRUCTION_LDS},
-			{`STEP1, `INSTRUCTION_LD_X},   {`STEP2, `INSTRUCTION_LD_X},
-			{`STEP1, `INSTRUCTION_LD_XP},  {`STEP2, `INSTRUCTION_LD_XP},
-			{`STEP1, `INSTRUCTION_LD_XN},  {`STEP2, `INSTRUCTION_LD_XN},
-			{`STEP1, `INSTRUCTION_LD_YZP}, {`STEP2, `INSTRUCTION_LD_YZP},
-			{`STEP1, `INSTRUCTION_LD_YZN}, {`STEP2, `INSTRUCTION_LD_YZN},
+			{`STEP1, `INSTRUCTION_LD_X},
+			{`STEP1, `INSTRUCTION_LD_XP},
+			{`STEP1, `INSTRUCTION_LD_XN},
+			{`STEP1, `INSTRUCTION_LD_YZP},
+			{`STEP1, `INSTRUCTION_LD_YZN},
 			{`STEP1, `INSTRUCTION_STD},
 			{`STEP1, `INSTRUCTION_STS},
 			{`STEP1, `INSTRUCTION_ST_X},
@@ -470,7 +470,7 @@ begin
 		{1'b1, `STEP0, `INSTRUCTION_LD_XN},
 		{1'b1, `STEP0, `INSTRUCTION_LD_YZN}: reg_rd = data_in_int;
 		
-		{1'b1, `STEP2, `INSTRUCTION_LD_XP},
+		{1'b1, `STEP1, `INSTRUCTION_LD_XP},
 		{1'b1, `STEP1, `INSTRUCTION_ST_XP}: 
 		begin
 			if(ROM_ADDR_WIDTH > 16)
@@ -478,7 +478,7 @@ begin
 			else
 				reg_rd = reg_rs2 + 1;
 		end
-		{1'b1, `STEP2, `INSTRUCTION_LD_YZP},
+		{1'b1, `STEP1, `INSTRUCTION_LD_YZP},
 		{1'b1, `STEP1, `INSTRUCTION_ST_YZP}: 
 		begin
 			if(ROM_ADDR_WIDTH > 16)
@@ -494,7 +494,7 @@ begin
 				reg_rd = reg_rs2 + 1;
 		end
 		
-		{1'b1, `STEP2, `INSTRUCTION_LD_XN},
+		{1'b1, `STEP1, `INSTRUCTION_LD_XN},
 		{1'b1, `STEP1, `INSTRUCTION_ST_XN}: 
 		begin
 			if(ROM_ADDR_WIDTH > 16)
@@ -502,7 +502,7 @@ begin
 			else
 				reg_rd = reg_rs2 - 1;
 		end
-		{1'b1, `STEP2, `INSTRUCTION_LD_YZN},
+		{1'b1, `STEP1, `INSTRUCTION_LD_YZN},
 		{1'b1, `STEP1, `INSTRUCTION_ST_YZN}: 
 		begin
 			if(ROM_ADDR_WIDTH > 16)
@@ -938,13 +938,13 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_ANDI_CBR}: rda[4] <= 1'b1;
 					{1'b1, `STEP0, `INSTRUCTION_ADIW},
 					{1'b1, `STEP0, `INSTRUCTION_SBIW}: rda <= {2'b11, pgm_data_registered[5:4], 1'b0};
-					{1'b1, `STEP1, `INSTRUCTION_LD_YZP},
+					{1'b1, `STEP0, `INSTRUCTION_LD_YZP},
 					{1'b1, `STEP0, `INSTRUCTION_ST_YZP},
-					{1'b1, `STEP1, `INSTRUCTION_LD_YZN},
+					{1'b1, `STEP0, `INSTRUCTION_LD_YZN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_YZN}: rda <= {3'b111, ~pgm_data_registered[3], 1'b0};
-					{1'b1, `STEP1, `INSTRUCTION_LD_XP},
+					{1'b1, `STEP0, `INSTRUCTION_LD_XP},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XP},
-					{1'b1, `STEP1, `INSTRUCTION_LD_XN},
+					{1'b1, `STEP0, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XN}: rda <= 5'b11010;
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R_P}: rda <= 5'b11110;
 				endcase
@@ -959,13 +959,13 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_FMULSU},
 					{1'b1, `STEP0, `INSTRUCTION_ADIW},
 					{1'b1, `STEP0, `INSTRUCTION_SBIW},
-					{1'b1, `STEP1, `INSTRUCTION_LD_YZP},
+					{1'b1, `STEP0, `INSTRUCTION_LD_YZP},
 					{1'b1, `STEP0, `INSTRUCTION_ST_YZP},
-					{1'b1, `STEP1, `INSTRUCTION_LD_YZN},
+					{1'b1, `STEP0, `INSTRUCTION_LD_YZN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_YZN},
-					{1'b1, `STEP1, `INSTRUCTION_LD_XP},
+					{1'b1, `STEP0, `INSTRUCTION_LD_XP},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XP},
-					{1'b1, `STEP1, `INSTRUCTION_LD_XN},
+					{1'b1, `STEP0, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XN},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R_P}: reg_rdm <= `REG_MODE_16_BIT;
 				endcase
@@ -1005,19 +1005,19 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_POP},
 					{1'b1, `STEP2, `INSTRUCTION_LDS},
 					{1'b1, `STEP1, `INSTRUCTION_LDS16},
-					{1'b1, `STEP2, `INSTRUCTION_LDD},
+					{1'b1, `STEP1, `INSTRUCTION_LDD},
+					{1'b1, `STEP0, `INSTRUCTION_LD_YZP},
 					{1'b1, `STEP1, `INSTRUCTION_LD_YZP},
-					{1'b1, `STEP2, `INSTRUCTION_LD_YZP},
 					{1'b1, `STEP0, `INSTRUCTION_ST_YZP},
+					{1'b1, `STEP0, `INSTRUCTION_LD_YZN},
 					{1'b1, `STEP1, `INSTRUCTION_LD_YZN},
-					{1'b1, `STEP2, `INSTRUCTION_LD_YZN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_YZN},
-					{1'b1, `STEP2, `INSTRUCTION_LD_X},
+					{1'b1, `STEP1, `INSTRUCTION_LD_X},
+					{1'b1, `STEP0, `INSTRUCTION_LD_XP},
 					{1'b1, `STEP1, `INSTRUCTION_LD_XP},
-					{1'b1, `STEP2, `INSTRUCTION_LD_XP},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XP},
+					{1'b1, `STEP0, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP1, `INSTRUCTION_LD_XN},
-					{1'b1, `STEP2, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XN},
 					{1'b1, `STEP0, `INSTRUCTION_IN}, // IN-only: doesn't read reg_rs1, only writes via rda/reg_rdw -- independent of OUT's own (still 2-cycle) timing.
 					{1'b1, `STEP1, `INSTRUCTION_LPM_R},
@@ -1063,7 +1063,6 @@ begin
 						else
 							data_addr_int <= reg_rs2 + {pgm_data_registered[13], pgm_data_registered[11:10], pgm_data_registered[2:0]};
 					end
-					{1'b1, `STEP2, `INSTRUCTION_LDD}: data_addr_int <= data_addr_int;
 					{1'b1, `STEP1, `INSTRUCTION_STD}: 
 					begin
 						if(ROM_ADDR_WIDTH > 16) 
@@ -1078,7 +1077,6 @@ begin
 						else
 							data_addr_int <= reg_rs2;
 					end
-					{1'b1, `STEP2, `INSTRUCTION_LD_YZP}: data_addr_int <= data_addr_int;
 					{1'b1, `STEP1, `INSTRUCTION_ST_YZP}: 
 					begin
 						if(ROM_ADDR_WIDTH > 16) 
@@ -1093,7 +1091,6 @@ begin
 						else
 							data_addr_int <= reg_rs2 - 1;
 					end
-					{1'b1, `STEP2, `INSTRUCTION_LD_YZN}: data_addr_int <= data_addr_int;
 					{1'b1, `STEP1, `INSTRUCTION_ST_YZN}: 
 					begin
 						if(ROM_ADDR_WIDTH > 16) 
@@ -1108,7 +1105,6 @@ begin
 						else
 							data_addr_int <= reg_rs2;
 					end
-					{1'b1, `STEP2, `INSTRUCTION_LD_X}: data_addr_int <= data_addr_int;
 					{1'b1, `STEP1, `INSTRUCTION_ST_X}: 
 					begin
 						if(ROM_ADDR_WIDTH > 16) 
@@ -1123,7 +1119,6 @@ begin
 						else
 							data_addr_int <= reg_rs2;
 					end
-					{1'b1, `STEP2, `INSTRUCTION_LD_XP}: data_addr_int <= data_addr_int;
 					{1'b1, `STEP1, `INSTRUCTION_ST_XP}: 
 					begin
 						if(ROM_ADDR_WIDTH > 16) 
@@ -1138,7 +1133,6 @@ begin
 						else
 							data_addr_int <= reg_rs2 - 1;
 					end
-					{1'b1, `STEP2, `INSTRUCTION_LD_XN}: data_addr_int <= data_addr_int;
 					{1'b1, `STEP1, `INSTRUCTION_ST_XN}: 
 					begin
 						if(ROM_ADDR_WIDTH > 16) 
@@ -1227,12 +1221,12 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_RETI},
 					{1'b1, `STEP1, `INSTRUCTION_POP},
 					{1'b1, `STEP1, `INSTRUCTION_LDS16},
-					{1'b1, `STEP2, `INSTRUCTION_LDD},
-					{1'b1, `STEP2, `INSTRUCTION_LD_YZP},
-					{1'b1, `STEP2, `INSTRUCTION_LD_YZN},
-					{1'b1, `STEP2, `INSTRUCTION_LD_X},
-					{1'b1, `STEP2, `INSTRUCTION_LD_XP},
-					{1'b1, `STEP2, `INSTRUCTION_LD_XN},
+					{1'b1, `STEP1, `INSTRUCTION_LDD},
+					{1'b1, `STEP1, `INSTRUCTION_LD_YZP},
+					{1'b1, `STEP1, `INSTRUCTION_LD_YZN},
+					{1'b1, `STEP1, `INSTRUCTION_LD_X},
+					{1'b1, `STEP1, `INSTRUCTION_LD_XP},
+					{1'b1, `STEP1, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP2, `INSTRUCTION_LDS},
 					{1'b1, `STEP0, `INSTRUCTION_IN}, // IN-only 1-cycle fix
 					{1'b1, `STEP0, `INSTRUCTION_CBI_SBI},
@@ -1316,12 +1310,6 @@ begin
 						end
 					end
 					{1'b1, `STEP1, `INSTRUCTION_LDS},
-					{1'b1, `STEP1, `INSTRUCTION_LDD},
-					{1'b1, `STEP1, `INSTRUCTION_LD_YZP},
-					{1'b1, `STEP1, `INSTRUCTION_LD_YZN},
-					{1'b1, `STEP1, `INSTRUCTION_LD_X},
-					{1'b1, `STEP1, `INSTRUCTION_LD_XP},
-					{1'b1, `STEP1, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP1, `INSTRUCTION_LPM_R},
 					{1'b1, `STEP1, `INSTRUCTION_LPM_R_P},
 					{1'b1, `STEP1, `INSTRUCTION_LPM_ELPM}: state_cnt <= `STEP2;
@@ -1391,22 +1379,16 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_LDS},
 					{1'b1, `STEP0, `INSTRUCTION_LDS16},
 					{1'b1, `STEP0, `INSTRUCTION_LDD},
-					{1'b1, `STEP1, `INSTRUCTION_LDD},
 					{1'b1, `STEP0, `INSTRUCTION_STD},
 					{1'b1, `STEP0, `INSTRUCTION_LD_YZP},
-					{1'b1, `STEP1, `INSTRUCTION_LD_YZP},
 					{1'b1, `STEP0, `INSTRUCTION_ST_YZP},
 					{1'b1, `STEP0, `INSTRUCTION_LD_YZN},
-					{1'b1, `STEP1, `INSTRUCTION_LD_YZN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_YZN},
 					{1'b1, `STEP0, `INSTRUCTION_LD_X},
-					{1'b1, `STEP1, `INSTRUCTION_LD_X},
 					{1'b1, `STEP0, `INSTRUCTION_ST_X},
 					{1'b1, `STEP0, `INSTRUCTION_LD_XP},
-					{1'b1, `STEP1, `INSTRUCTION_LD_XP},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XP},
 					{1'b1, `STEP0, `INSTRUCTION_LD_XN},
-					{1'b1, `STEP1, `INSTRUCTION_LD_XN},
 					{1'b1, `STEP0, `INSTRUCTION_ST_XN},
 					{1'b1, `STEP0, `INSTRUCTION_CBI_SBI},
 					{1'b1, `STEP0, `INSTRUCTION_SBIC_SBIS},
