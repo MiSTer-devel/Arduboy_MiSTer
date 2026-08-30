@@ -1,4 +1,5 @@
 set_global_assignment -name QIP_FILE rtl/avr/atmega.qip
 set_global_assignment -name VERILOG_FILE rtl/vgaHdmi.v
 set_global_assignment -name VERILOG_FILE rtl/arduboy_board.v
+set_global_assignment -name VERILOG_FILE rtl/arduboy_rom.v
 set_global_assignment -name SYSTEMVERILOG_FILE Arduboy.sv
