@@ -250,6 +250,20 @@ reg reg_rdm;
 
 reg skip_next_clock;
 
+// Skip group (CPSE/SBRC/SBRS). The decision is available in the instruction's own cycle: rs1a/rs2a
+// are assigned at the very edge the opcode is latched, so reg_rs1/reg_rs2 name its own operands
+// throughout that cycle. skip_next_clock cannot carry it -- it is registered, so it lands one edge
+// later, which is right for a 2-state instruction and skips the WRONG instruction once these
+// retire in one. skip_now gates the decode latch combinationally in the same cycle; skip_taken
+// keeps the still-held opcode from re-arming while the latch is suppressed; skip_second carries
+// the suppression into a second cycle when the skipped instruction is two words.
+// SBIC/SBIS are deliberately not included: their operand is an I/O read whose address is only
+// assigned at STEP0, so data_in_int is not valid until the cycle after -- they stay 2-state.
+reg skip_taken;
+reg skip_second;
+reg skip_cond;
+reg skip_victim_2word;
+
 reg halt_int;
 
 reg [7:0]PC_TMP_H;
@@ -267,6 +281,33 @@ reg [ROM_ADDR_WIDTH - 1:0]PC_PLUS_COND_BRANCH;
 reg cnt_rst;
 reg unlock_int_registered_step_2;
 
+
+always @ *
+begin
+	skip_cond = 1'b0;
+	casex({CORE_TYPE, pgm_data_registered})
+		`INSTRUCTION_CPSE:      skip_cond = (reg_rs1 == reg_rs2);
+		`INSTRUCTION_SBRC_SBRS: skip_cond = (reg_rs1[pgm_data_registered[2:0]] == pgm_data_registered[9]);
+	endcase
+	skip_victim_2word = 1'b0;
+	casex({CORE_TYPE, pgm_data_int})
+		`INSTRUCTION_LDS,
+		`INSTRUCTION_STS,
+		`INSTRUCTION_JMP,
+		`INSTRUCTION_CALL: skip_victim_2word = 1'b1;
+	endcase
+end
+
+// Not while a hold is releasing or a reset is in flight: pgm_data_registered is then presenting
+// something other than the instruction rs1a/rs2a were latched for.
+wire skip_now   = &{state_cnt == `STEP0, skip_cond, ~skip_taken, ~skip_second, ~cnt_rst, ~holding_instr};
+wire skip_stall = skip_now | skip_taken | skip_second;
+
+// NOT gated by skip_stall: the decode latch is blocking and runs before the state_cnt casex in
+// the same pass, so the cycle that latches the post-skip instruction must still execute or that
+// instruction loses its STEP0->STEP1 transition and runs a state short. Suppressing the latch is
+// enough on its own -- CPSE/SBRC/SBRS have no casex entries left anywhere, so re-presenting the
+// held opcode for one more cycle does nothing.
 wire execute	= (~skip_next_clock & ~cnt_rst);
 
 /**************** Interrupt instance  ********************/
@@ -363,7 +404,7 @@ begin
 	PC_SNAPSHOOT = PC;
 	if(VECTOR_INT_TABLE_SIZE != 0)
 	begin
-		if(&{~skip_next_clock, ~cnt_rst, (USE_HALT != "TRUE" | ~halt_int | state_cnt != `STEP0)})
+		if(&{~skip_next_clock, ~skip_stall, ~cnt_rst, (USE_HALT != "TRUE" | ~halt_int | state_cnt != `STEP0)})
 		begin
 			case({unlock_int_registered_step_2, int_request, sreg_out[`XMEGA_FLAG_I], state_cnt})
 				{3'b011, `STEP0}:
@@ -397,7 +438,7 @@ always @ (posedge clk)
 begin
 	if(VECTOR_INT_TABLE_SIZE != 0)
 	begin
-		if(&{~skip_next_clock, ~cnt_rst, (USE_HALT != "TRUE" | ~halt_int | state_cnt != `STEP0)})
+		if(&{~skip_next_clock, ~skip_stall, ~cnt_rst, (USE_HALT != "TRUE" | ~halt_int | state_cnt != `STEP0)})
 		begin
 			// Same guard as the STEP0 dispatch case above, kept in lockstep.
 			if(({unlock_int_registered_step_2, int_request, sreg_out[`XMEGA_FLAG_I], state_cnt} == {3'b011, `STEP0})
@@ -572,6 +613,8 @@ begin
 		out_retire_pending <= 1'b0;
 		holding_instr <= 1'b0;
 		two_cycle_hold_next <= 1'b0;
+		skip_taken <= 1'b0;
+		skip_second <= 1'b0;
 	end
 	else
 	begin
@@ -580,6 +623,8 @@ begin
 		data_read_int <= 1'b0;
 		reg_rdw <= 1'b0;
 		skip_next_clock <= 1'b0;
+		skip_taken <= skip_now | skip_second;
+		skip_second <= skip_now & skip_victim_2word;
 		two_cycle_hold_next <= 1'b0;
 		if(&{USE_HALT == "TRUE", halt_int, state_cnt == `STEP0, ~skip_next_clock, ~int_registered})
 		begin
@@ -624,7 +669,7 @@ begin
 					holding_instr <= 1'b0;
 				end
 			end
-			else if(&{state_cnt == `STEP0, ~skip_next_clock})
+			else if(&{state_cnt == `STEP0, ~skip_next_clock, ~skip_now, ~skip_second})
 			begin
 				pgm_data_registered = pgm_data_int;
 				// Read-after-write hazard: a pending OUT retirement writes an I/O address one or
@@ -872,32 +917,6 @@ begin
 					begin
 						if(sreg_out[pgm_data_registered[2:0]] == ~pgm_data_registered[10])
 							skip_next_clock <= 1'b1;
-					end
-					{1'b1, `STEP1, `INSTRUCTION_CPSE}:
-					begin
-						if(reg_rs1 == reg_rs2)
-						begin
-							casex({CORE_TYPE, pgm_data_int})
-								`INSTRUCTION_LDS,
-								`INSTRUCTION_STS,
-								`INSTRUCTION_JMP,
-								`INSTRUCTION_CALL: ;
-								default: skip_next_clock <= 1'b1;
-							endcase
-						end
-					end
-					{1'b1, `STEP1, `INSTRUCTION_SBRC_SBRS}:
-					begin
-						if(reg_rs1[pgm_data_registered[2:0]] == pgm_data_registered[9])
-						begin
-							casex({CORE_TYPE, pgm_data_int})
-								`INSTRUCTION_LDS,
-								`INSTRUCTION_STS,
-								`INSTRUCTION_JMP,
-								`INSTRUCTION_CALL: ;
-								default: skip_next_clock <= 1'b1;
-							endcase
-						end
 					end
 					{1'b1, `STEP1, `INSTRUCTION_SBIC_SBIS}:
 					begin
@@ -1249,8 +1268,6 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_RET},
 					{1'b1, `STEP0, `INSTRUCTION_RETI},
 					{1'b1, `STEP0, `INSTRUCTION_POP},
-					{1'b1, `STEP0, `INSTRUCTION_CPSE},
-					{1'b1, `STEP0, `INSTRUCTION_SBRC_SBRS},
 					{1'b1, `STEP0, `INSTRUCTION_LDS},
 					{1'b1, `STEP0, `INSTRUCTION_LDS16},
 					{1'b1, `STEP0, `INSTRUCTION_STS},
@@ -1279,30 +1296,6 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_CALL},
 					{1'b1, `STEP1, `INSTRUCTION_RET},
 					{1'b1, `STEP1, `INSTRUCTION_RETI}: state_cnt <= `STEP2;
-					{1'b1, `STEP1, `INSTRUCTION_CPSE}:
-					begin
-						if(reg_rs1 == reg_rs2)
-						begin
-							casex({CORE_TYPE, pgm_data_int})
-							`INSTRUCTION_LDS,
-							`INSTRUCTION_STS,
-							`INSTRUCTION_JMP,
-							`INSTRUCTION_CALL: state_cnt <= `STEP2;
-							endcase
-						end
-					end
-					{1'b1, `STEP1, `INSTRUCTION_SBRC_SBRS}:
-					begin
-						if(reg_rs1[pgm_data_registered[2:0]] == pgm_data_registered[9])
-						begin
-							casex({CORE_TYPE, pgm_data_int})
-							`INSTRUCTION_LDS,
-							`INSTRUCTION_STS,
-							`INSTRUCTION_JMP,
-							`INSTRUCTION_CALL: state_cnt <= `STEP2;
-							endcase
-						end
-					end
 					{1'b1, `STEP1, `INSTRUCTION_SBIC_SBIS}:
 					begin
 						if(data_in_int[pgm_data_registered[2:0]] == pgm_data_registered[9])
@@ -1326,8 +1319,6 @@ begin
 					{1'b1, `STEP1, `INSTRUCTION_LPM_R_P},
 					{1'b1, `STEP1, `INSTRUCTION_LPM_ELPM}: state_cnt <= `STEP2;
 	/*************************************************************/
-					{1'b1, `STEP2, `INSTRUCTION_CPSE},
-					{1'b1, `STEP2, `INSTRUCTION_SBRC_SBRS},
 					{1'b1, `STEP2, `INSTRUCTION_SBIC_SBIS}: state_cnt <= `STEP3;
 				endcase
 	/* Set "out_retire_pending" */ /*************************************************************/
@@ -1385,8 +1376,6 @@ begin
 					// data_in_int is the high byte (addr SP+1), data_in2 the low byte (SP+2).
 					{1'b1, `STEP2, `INSTRUCTION_RET}: PC <= {data_in_int, data_in2};
 					{1'b1, `STEP2, `INSTRUCTION_RETI}: PC <= {data_in_int, data_in2} - 1;
-					{1'b1, `STEP0, `INSTRUCTION_CPSE},
-					{1'b1, `STEP0, `INSTRUCTION_SBRC_SBRS},
 					{1'b1, `STEP0, `INSTRUCTION_POP},
 					{1'b1, `STEP1, `INSTRUCTION_LDS},
 					{1'b1, `STEP0, `INSTRUCTION_LDS16},
