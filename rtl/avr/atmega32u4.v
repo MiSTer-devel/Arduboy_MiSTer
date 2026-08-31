@@ -41,6 +41,9 @@
 
 `define VECTOR_INT_TABLE_SIZE   42
 `define WATCHDOG_CNT_WIDTH      0//27
+/* SPM page geometry -- ATmega32U4 datasheet Ch.28 Table 28-11: 64 words/page needs 6 bits
+ * (PC[5:0]) to address a word within one page ("PAGEMSB"). */
+`define SPM_PAGE_ADDR_WIDTH     6
 
 /* TIMMERS PRESCALLERS MODULE */
 module tim_013_prescaller (
@@ -96,6 +99,11 @@ module atmega32u4 # (
     input clk_pll,
     output [`ROM_ADDR_WIDTH-1:0] pgm_addr,
     input [15:0] pgm_data,
+    // Program-memory write port for SPM Page Erase/Write; wired up at board level.
+    output [`ROM_ADDR_WIDTH-1:0] spm_pgm_addr,
+    output [15:0] spm_pgm_data,
+    output spm_pgm_write,
+    input spm_pgm_write_ack,
     input [7:0] joystick_analog,
     input status,
     input PF4, PF5, PF6, PF7, PE6, PB4,
@@ -963,7 +971,8 @@ mega # (
     .WATCHDOG_CNT_WIDTH(`WATCHDOG_CNT_WIDTH),/* If is 0 the watchdog is disabled */
     .VECTOR_INT_TABLE_SIZE(`VECTOR_INT_TABLE_SIZE),/* If is 0 the interrupt module is disabled */
     .USE_HALT(USE_HALT),
-    .REGS_REGISTERED(REGS_REGISTERED)
+    .REGS_REGISTERED(REGS_REGISTERED),
+    .SPM_PAGE_ADDR_WIDTH(`SPM_PAGE_ADDR_WIDTH)
     )atmega32u4_inst(
     .rst(rst),
     .sys_rst_out(wdt_rst),
@@ -977,6 +986,10 @@ mega # (
     // FLASH space data interface.
     .pgm_addr(pgm_addr),
     .pgm_data(pgm_data),
+    .spm_pgm_addr(spm_pgm_addr),
+    .spm_pgm_data(spm_pgm_data),
+    .spm_pgm_write(spm_pgm_write),
+    .spm_pgm_write_ack(spm_pgm_write_ack),
     // RAM space data interface.
     .data_addr(data_addr),
     .data_out(core_data_out),

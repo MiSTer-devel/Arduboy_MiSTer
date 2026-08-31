@@ -156,7 +156,9 @@ module mega #(
 	parameter RAM_ADDR_WIDTH = 16,
 	parameter WATCHDOG_CNT_WIDTH = 0,
 	parameter VECTOR_INT_TABLE_SIZE = 0,
-	parameter REGS_REGISTERED = "FALSE"
+	parameter REGS_REGISTERED = "FALSE",
+	// Page geometry, per chip: PCWORD width. ATmega32U4 = 6, ATmega644 = 7. No safe default.
+	parameter SPM_PAGE_ADDR_WIDTH = 6
 	)(
 	input rst,
 	output sys_rst_out,
@@ -176,6 +178,14 @@ module mega #(
 	// targets I/O space, so (unlike data_in_int) needs no address-mapped-register mux.
 	output reg [RAM_ADDR_WIDTH - 1:0]data_addr2,
 	input [7:0]data_in2,
+	// Program-memory write port, used by Page Erase/Write only. One word per pulse.
+	output reg [ROM_ADDR_WIDTH - 1:0]spm_pgm_addr,
+	output reg [15:0]spm_pgm_data,
+	output reg spm_pgm_write,
+	// Write confirmation, one word in flight at a time. The wait also guarantees a cycle with
+	// spm_pgm_write low between words, which is what lets a top level share this port with the
+	// instruction fetch.
+	input spm_pgm_write_ack,
 	input [(VECTOR_INT_TABLE_SIZE == 0 ? 0 : VECTOR_INT_TABLE_SIZE - 1):0]int_sig,
 	output reg [(VECTOR_INT_TABLE_SIZE == 0 ? 0 : VECTOR_INT_TABLE_SIZE - 1):0]int_rst
     );
@@ -194,6 +204,19 @@ reg data_read_int;
 reg [1:0]state_cnt;
 reg [7:0]SREG;
 reg [RAM_ADDR_WIDTH - 1:0]SP;
+// SPMCSR, I/O 0x37. Bit layout identical on ATmega32U4 and ATmega644.
+reg [7:0]SPMCSR;
+// Remaining cycles of the 4-clock arming window opened by writing SPMEN.
+reg [2:0]spm_arm_cnt;
+// Temporary page buffer. Auto-erased per word on Page Write, and at power-up below.
+reg [15:0]spm_buffer[0:(2**SPM_PAGE_ADDR_WIDTH)-1];
+integer spm_bi;   // power-up buffer-erase loop index, see the initial block
+// SPMCSR[4:0] is cleared the cycle SPM decodes, so the requested operation is latched here
+// for the STEP1 action to read.
+reg [4:0]spm_op_latched;
+reg [SPM_PAGE_ADDR_WIDTH-1:0]spm_page_word_cnt;
+// Blocks the next word until the current one is acknowledged.
+reg spm_word_pending;
 reg [7:0]EIND;
 reg [7:0]RAMPZ;
 reg [7:0]RAMPY;
@@ -378,6 +401,8 @@ reg out_retire_fire;
 // implicitly by nearly the whole ISA (every ALU flag computation, every conditional branch via
 // sreg_out), so it isn't a narrow, enumerable hazard like the data bus.
 `define OUT_TARGETS_SREG ({pgm_data_registered[10:9],pgm_data_registered[3:0]} == 6'h3F)
+// SPMCSR, like SREG, takes the 2-cycle path so the arming window starts from a known cycle.
+`define OUT_TARGETS_SPMCSR ({pgm_data_registered[10:9],pgm_data_registered[3:0]} == 6'h37)
 
 int_encoder # (
 	.VECTOR_INT_TABLE_SIZE(VECTOR_INT_TABLE_SIZE)
@@ -498,6 +523,7 @@ begin
 		24'h05D: data_in_int = SP[7:0];
 		24'h05E: if(RAM_ADDR_WIDTH > 8) data_in_int = SP[RAM_ADDR_WIDTH - 1:8];
 		24'h05F: data_in_int = SREG;
+		24'h057: data_in_int = SPMCSR;
 	endcase
 /* Set "reg_rd" */ /*************************************************************/
 	casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
@@ -588,6 +614,19 @@ initial begin
 	held_instr = 16'h0000;
 	holding_instr = 1'b0;
 	two_cycle_hold_next = 1'b0;
+	SPMCSR = 8'h00;
+	spm_arm_cnt = 3'h0;
+	spm_op_latched = 5'h00;
+	spm_page_word_cnt = 0;
+	spm_pgm_addr = 0;
+	spm_pgm_data = 16'h0000;
+	spm_pgm_write = 1'b0;
+	spm_word_pending = 1'b0;
+	// The temporary buffer auto-erases after a Page Write and after reset (Ch.27.7.2). The former
+	// is handled per word in the walk below; this covers power-up. A soft reset does not re-erase:
+	// clearing every word in one cycle would take the array out of RAM inference.
+	for(spm_bi = 0; spm_bi < (2**SPM_PAGE_ADDR_WIDTH); spm_bi = spm_bi + 1)
+		spm_buffer[spm_bi] = 16'hFFFF;
 end
 
 reg halt_ack_n;
@@ -615,12 +654,16 @@ begin
 		two_cycle_hold_next <= 1'b0;
 		skip_taken <= 1'b0;
 		skip_second <= 1'b0;
+		SPMCSR <= 8'h00;
+		spm_arm_cnt <= 3'h0;
+		spm_word_pending <= 1'b0;
 	end
 	else
 	begin
 		halt_int <=  halt;
 		data_write_int <= 1'b0;
 		data_read_int <= 1'b0;
+		spm_pgm_write <= 1'b0;
 		reg_rdw <= 1'b0;
 		skip_next_clock <= 1'b0;
 		skip_taken <= skip_now | skip_second;
@@ -820,6 +863,94 @@ begin
 						end
 					endcase
 				end
+	/* Set "SPMCSR" */ /*************************************************************/
+				// Writing SPMEN arms the next SPM instruction for 4 clock cycles; the armed bits auto-clear
+				// on timeout, or immediately when an SPM executes inside the window.
+				if(SPMCSR[0])
+				begin
+					casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
+						{1'b1, `STEP0, `INSTRUCTION_SPM}:
+						begin
+							spm_op_latched <= SPMCSR[4:0];
+							SPMCSR[4:0] <= 5'h00;
+							spm_arm_cnt <= 3'h0;
+							spm_page_word_cnt <= 0;
+						end
+						default:
+						begin
+							if(spm_arm_cnt == 3'h0)
+								SPMCSR[4:0] <= 5'h00;
+							else
+								spm_arm_cnt <= spm_arm_cnt - 3'h1;
+						end
+					endcase
+				end
+				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
+					{1'b1, `STEP1, `INSTRUCTION_STS}:
+					begin
+						case(ROM_ADDR_WIDTH > 16 ? {RAMPD, pgm_data_int} : pgm_data_int)
+							24'h057:
+							begin
+								SPMCSR <= reg_rs1;
+								if(reg_rs1[0]) spm_arm_cnt <= 3'd4;
+							end
+						endcase
+					end
+					{1'b1, `STEP1, `INSTRUCTION_OUT}:
+					begin
+						case({pgm_data_registered[10:9],pgm_data_registered[3:0]})
+							6'h37:
+							begin
+								SPMCSR <= reg_rs1;
+								if(reg_rs1[0]) spm_arm_cnt <= 3'd4;
+							end
+						endcase
+					end
+				endcase
+	/* Set "spm_buffer" */ /*************************************************************/
+				// Buffer fill addresses the buffer by PCWORD = Z[SPM_PAGE_ADDR_WIDTH:1]; Z0 is ignored.
+				// ijmp_z taps Z combinationally, safe here because Z cannot change mid-instruction.
+				// Page Erase and Page Write act on the flash page itself, not the buffer, and walk
+				// every word of it; Page Write auto-erases each buffer word as it commits it. The
+				// physical flash-write time is not modelled.
+				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
+					{1'b1, `STEP1, `INSTRUCTION_SPM}:
+					begin
+						case(spm_op_latched)
+							5'b00001: // SPMEN: buffer fill
+								spm_buffer[ijmp_z[SPM_PAGE_ADDR_WIDTH:1]] <= reg_rs1;
+							5'b00011: // SPMEN+PGERS: Page Erase
+							if(!spm_word_pending)
+							begin
+								spm_pgm_addr <= {ijmp_z[ROM_ADDR_WIDTH:SPM_PAGE_ADDR_WIDTH+1], spm_page_word_cnt};
+								spm_pgm_data <= 16'hFFFF;
+								spm_pgm_write <= 1'b1;
+								spm_word_pending <= 1'b1;
+							end
+							5'b00101: // SPMEN+PGWRT: Page Write
+							if(!spm_word_pending)
+							begin
+								spm_pgm_addr <= {ijmp_z[ROM_ADDR_WIDTH:SPM_PAGE_ADDR_WIDTH+1], spm_page_word_cnt};
+								spm_pgm_data <= spm_buffer[spm_page_word_cnt];
+								spm_pgm_write <= 1'b1;
+								spm_buffer[spm_page_word_cnt] <= 16'hFFFF;
+								spm_word_pending <= 1'b1;
+							end
+						endcase
+					end
+				endcase
+	/* Set "spm_page_word_cnt" */ /*************************************************************/
+				// Advances only on acknowledgement, not once per cycle.
+				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
+					{1'b1, `STEP1, `INSTRUCTION_SPM}:
+					begin
+						if((spm_op_latched == 5'b00011 || spm_op_latched == 5'b00101) && spm_pgm_write_ack)
+						begin
+							spm_page_word_cnt <= spm_page_word_cnt + 1'b1;
+							spm_word_pending <= 1'b0;
+						end
+					end
+				endcase
 	/* Set "rs1a" */ /*************************************************************/
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP0, `INSTRUCTION_MULS}: rs1a[4] <= 1'b1;
@@ -835,12 +966,15 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_ADIW},
 					{1'b1, `STEP0, `INSTRUCTION_SBIW}: rs1a <= {2'b11, pgm_data_registered[5:4], 1'b0};
 					{1'b1, `STEP0, `INSTRUCTION_ICALL}: rs1a <= 5'b11110;
+					// SPM's operand is the fixed pair R1:R0; the opcode carries no register field.
+					{1'b1, `STEP0, `INSTRUCTION_SPM}: rs1a <= 5'b00000;
 				endcase
 	/* Set "reg_rs1m" */ /*************************************************************/
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP0, `INSTRUCTION_ADIW},
 					{1'b1, `STEP0, `INSTRUCTION_SBIW},
-					{1'b1, `STEP0, `INSTRUCTION_ICALL}: reg_rs1m <= `REG_MODE_16_BIT;
+					{1'b1, `STEP0, `INSTRUCTION_ICALL},
+					{1'b1, `STEP0, `INSTRUCTION_SPM}: reg_rs1m <= `REG_MODE_16_BIT;
 				endcase
 	/* Set "rs2a" */ /*************************************************************/
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
@@ -1281,11 +1415,19 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_SBIC_SBIS},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R_P},
-					{1'b1, `STEP0, `INSTRUCTION_LPM_ELPM}: state_cnt <= `STEP1;
+					{1'b1, `STEP0, `INSTRUCTION_LPM_ELPM},
+					{1'b1, `STEP0, `INSTRUCTION_SPM}: state_cnt <= `STEP1;
+					// Page Erase/Write stay at STEP1 until the final word is acknowledged. Exiting on the counter
+					// alone would leave one acknowledgement outstanding and drop that word: the counter reaches
+					// all-1s on the same cycle the last write is issued.
+					{1'b1, `STEP1, `INSTRUCTION_SPM}:
+						if((spm_op_latched == 5'b00011 || spm_op_latched == 5'b00101) &
+							~(spm_pgm_write_ack & (spm_page_word_cnt == {SPM_PAGE_ADDR_WIDTH{1'b1}})))
+							state_cnt <= `STEP1;
 					// OUT stays STEP0 (1-cycle) except OUT_TARGETS_SREG, which always uses the
 					// 2-cycle STEP0->STEP1 path. A stalled OUT (blocked behind a pending
 					// retirement) also stays at STEP0 and simply re-latches next cycle.
-					{1'b1, `STEP0, `INSTRUCTION_OUT}: if(`OUT_TARGETS_SREG) state_cnt <= `STEP1;
+					{1'b1, `STEP0, `INSTRUCTION_OUT}: if(`OUT_TARGETS_SREG | `OUT_TARGETS_SPMCSR) state_cnt <= `STEP1;
 	/*************************************************************/
 					{1'b1, `STEP1, `INSTRUCTION_CALL},
 					{1'b1, `STEP1, `INSTRUCTION_RET},
@@ -1320,7 +1462,7 @@ begin
 				casex({execute, state_cnt, CORE_TYPE, pgm_data_registered})
 					{1'b1, `STEP0, `INSTRUCTION_OUT}:
 					begin
-						if(~`OUT_TARGETS_SREG & ~(out_retire_pending & bus_busy_this_cycle))
+						if(~`OUT_TARGETS_SREG & ~`OUT_TARGETS_SPMCSR & ~(out_retire_pending & bus_busy_this_cycle))
 						begin
 							out_retire_pending <= 1'b1;
 							out_retire_instr <= pgm_data_registered;
@@ -1386,10 +1528,13 @@ begin
 					{1'b1, `STEP0, `INSTRUCTION_LPM_R_P},
 					{1'b1, `STEP1, `INSTRUCTION_LPM_R_P},
 					{1'b1, `STEP0, `INSTRUCTION_LPM_ELPM},
-					{1'b1, `STEP1, `INSTRUCTION_LPM_ELPM}: PC <= PC;
+					{1'b1, `STEP1, `INSTRUCTION_LPM_ELPM},
+					// PC must stay frozen across the repeated STEP1 cycles.
+					{1'b1, `STEP0, `INSTRUCTION_SPM},
+					{1'b1, `STEP1, `INSTRUCTION_SPM}: PC <= PC;
 					// OUT freezes PC only for OUT_TARGETS_SREG's old path or while genuinely stalled
 					// (a retirement pending and the bus busy this cycle) -- otherwise 1-cycle throughput.
-					{1'b1, `STEP0, `INSTRUCTION_OUT}: if(`OUT_TARGETS_SREG | (out_retire_pending & bus_busy_this_cycle)) PC <= PC;
+					{1'b1, `STEP0, `INSTRUCTION_OUT}: if(`OUT_TARGETS_SREG | `OUT_TARGETS_SPMCSR | (out_retire_pending & bus_busy_this_cycle)) PC <= PC;
 				endcase
 			end
 		end

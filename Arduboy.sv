@@ -149,12 +149,37 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
     .ioctl_dout(ioctl_dout)
 );
 
-(* ram_init_file = "rtl/Arduventure.mif" *)
-reg  [1:0][7:0] rom[16384];
 wire [13:0] pgm_addr;
-reg  [15:0] pgm_data;
+wire [15:0] pgm_data;
 
-always @ (posedge clk_avr) pgm_data <= rom[pgm_addr];
+// SPM writes a page word at a time through the ROM's CPU-side port. The core holds SPM for
+// the whole walk and pulses spm_pgm_write for one cycle per word, so borrowing the read
+// address costs the fetch nothing.
+wire [13:0] spm_pgm_addr;
+wire [15:0] spm_pgm_data;
+wire        spm_pgm_write;
+// A port-A write commits on the edge that presents it, so the word has landed a cycle later.
+reg         spm_pgm_write_ack;
+always @(posedge clk_avr) spm_pgm_write_ack <= spm_pgm_write;
+
+// Loader writes, muxed onto the ROM's byte-wide port B. Both writers below drive these.
+reg  [14:0] rom_wraddr;
+reg   [7:0] rom_wrdata;
+reg         rom_wr;
+
+arduboy_rom #(.MEM_INIT_FILE("rtl/Arduventure.mif")) rom
+(
+	.clk_avr(clk_avr),
+	.addr_a(spm_pgm_write ? spm_pgm_addr : pgm_addr),
+	.data_a(spm_pgm_data),
+	.wren_a(spm_pgm_write),
+	.q_a(pgm_data),
+
+	.clk_sys(clk_sys),
+	.addr_b(rom_wraddr),
+	.data_b(rom_wrdata),
+	.wren_b(rom_wr)
+);
 
 wire [3:0] digit = (ioctl_dout[7:4] != 3) ? (ioctl_dout[3:0] + 4'd9) : ioctl_dout[3:0];
 always @ (posedge clk_sys) begin
@@ -163,8 +188,14 @@ always @ (posedge clk_sys) begin
     reg [15:0] addr;
     reg  [3:0] code;
 
+    rom_wr <= 0;
+
     if (ioctl_wr && cart_download) begin
-        if(!ioctl_index) rom[ioctl_addr[14:1]][ioctl_addr[0]] <= ioctl_dout;
+        if(!ioctl_index) begin
+            rom_wraddr <= ioctl_addr[14:0];
+            rom_wrdata <= ioctl_dout;
+            rom_wr     <= 1;
+        end
         else begin
             if(state) state <= state + 1'd1;
             case(state)
@@ -179,7 +210,9 @@ always @ (posedge clk_sys) begin
                  8: if({code,digit}) state <= 0;
                  9: code        <= digit;
                 10: begin
-                        rom[addr[14:1]][addr[0]] <= {code,digit};
+                        rom_wraddr <= addr[14:0];
+                        rom_wrdata <= {code,digit};
+                        rom_wr     <= 1;
                         addr <= addr + 1'd1;
                         cnt <= cnt - 1'd1;
                         state <= state - 1'd1;
@@ -201,6 +234,10 @@ arduboy_board arduboy_board
     .rst(reset),
     .pgm_addr(pgm_addr),
     .pgm_data(pgm_data),
+    .spm_pgm_addr(spm_pgm_addr),
+    .spm_pgm_data(spm_pgm_data),
+    .spm_pgm_write(spm_pgm_write),
+    .spm_pgm_write_ack(spm_pgm_write_ack),
     .buttons(~(status[1] ? {joystick[5:4], joystick[1], joystick[0], joystick[2], joystick[3]} : joystick[5:0])),
     .joystick_analog(status[16] ? {~paddle[7],paddle[6:0]} : joystick_analog[7:0]),
     .status(|status[16:15]),
