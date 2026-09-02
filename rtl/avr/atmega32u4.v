@@ -883,15 +883,16 @@ atmega_eep # (
     .bus_dat_in(core_data_out),
     .bus_dat_out(dat_eeprom_d_out),
     .int_out(int_ee_ready),
-    .int_rst(int_ee_ready_rst)
-    /*.ext_eep_addr(0),
-    .ext_eep_data_in(0),
+    .int_rst(int_ee_ready_rst),
+    // Tied off explicitly: atmega-eep.v indexes its array through
+    // ext_eep_data_en, so leaving these unconnected makes the whole EEPROM
+    // read as X in simulation. Synthesis infers 0, hardware was never affected.
+    .ext_eep_addr(17'd0),
+    .ext_eep_data_in(8'd0),
     .ext_eep_data_wr(1'b0),
-    .ext_eep_data_out(ext_eep_data_out),
+    .ext_eep_data_out(),
     .ext_eep_data_rd(1'b0),
-    .ext_eep_data_en(1'b0),
-    .content_modifyed(eep_content_modifyed),
-    .debug()*/
+    .ext_eep_data_en(1'b0)
     );
 end
 else
