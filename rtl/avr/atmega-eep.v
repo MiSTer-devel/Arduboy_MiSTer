@@ -26,7 +26,12 @@ module atmega_eep # (
     parameter EEARL_ADDR = 'h21,
     parameter EEDR_ADDR = 'h22,
     parameter EECR_ADDR = 'h23,
-    parameter EEP_SIZE = 512
+    parameter EEP_SIZE = 512,
+    // Programming time. Table 5-3: an EEPROM write takes 26,368 calibrated-RC
+    // cycles (3.3 ms). The instantiating chip top expresses that in core clocks,
+    // since only it knows its own clock. 1 keeps the previous instant write.
+    parameter EEP_WRITE_CYCLES = 1,
+    parameter EEP_WRITE_CNT_WIDTH = 1
 )(
     input rst,
     input clk,
@@ -72,6 +77,8 @@ reg [7:0]read_tmp;
 reg int_p;
 reg int_n;
 
+reg [EEP_WRITE_CNT_WIDTH-1:0] wr_busy_cnt;
+
 always @ *
 begin
     bus_dat_out = 8'h00;
@@ -101,6 +108,7 @@ begin
         int_n <= 1'b0;
         dat_to_write <= 1'b0;
         eep_wr <= 1'b0;
+        wr_busy_cnt <= 'h0;
     end
     else
     begin
@@ -125,7 +133,21 @@ begin
                 end
             endcase
         end
-        if(&EECR[2:1])
+        if(|wr_busy_cnt)
+        begin
+            // Programming in progress. EEPE stays set so a polling loop spins,
+            // and hardware clears it when the time has elapsed (5.3.4).
+            wr_busy_cnt <= wr_busy_cnt - 1'b1;
+            if(wr_busy_cnt == 1)
+            begin
+                EECR[1] <= 1'b0;
+                if(int_p == int_n)
+                begin
+                    int_p <= ~int_p;
+                end
+            end
+        end
+        else if(&EECR[2:1])
         begin
             if(|eempe_timeout_cnt)
             begin
@@ -141,11 +163,17 @@ begin
                         eep_wr <= 1'b1;
                     end
                 endcase
+                wr_busy_cnt <= EEP_WRITE_CYCLES[EEP_WRITE_CNT_WIDTH-1:0];
             end
-            EECR[2:1] <= 2'b00;
-            if(int_p == int_n)
+            EECR[2] <= 1'b0;
+            if(~|eempe_timeout_cnt)
             begin
-                int_p <= ~int_p;
+                // Arming window expired: no write, EEPE retires immediately.
+                EECR[1] <= 1'b0;
+                if(int_p == int_n)
+                begin
+                    int_p <= ~int_p;
+                end
             end
         end
         if(EECR[0])

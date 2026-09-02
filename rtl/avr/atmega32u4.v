@@ -873,7 +873,11 @@ atmega_eep # (
     .EEARL_ADDR('h41),
     .EEDR_ADDR('h40),
     .EECR_ADDR('h3F),
-    .EEP_SIZE(1024)
+    .EEP_SIZE(1024),
+    // 26,368 calibrated-RC cycles (Table 5-3, 3.296 ms) at this core's 16 MHz
+    // clk_avr = 52,736 core clocks.
+    .EEP_WRITE_CYCLES(52736),
+    .EEP_WRITE_CNT_WIDTH(16)
 )eep(
     .rst(rst),
     .clk(clk),
