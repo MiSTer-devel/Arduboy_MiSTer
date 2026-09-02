@@ -127,7 +127,7 @@ begin
         end
         if(&EECR[2:1])
         begin
-            if(|eempe_timeout_cnt & ({EEARH, EEARL} > 2))
+            if(|eempe_timeout_cnt)
             begin
                 case(EECR[5:4])
                     2'h0, 2'h2:
@@ -137,7 +137,7 @@ begin
                     end
                     2'h1:
                     begin
-                        dat_to_write <= 8'h00;
+                        dat_to_write <= 8'hFF;
                         eep_wr <= 1'b1;
                     end
                 endcase
@@ -166,7 +166,7 @@ end
 
 always @ (posedge clk)
 begin
-    if(eep_wr & ({EEARH, EEARL} > 2))
+    if(eep_wr)
     begin
         eep[ext_eep_data_en ? ext_eep_addr : {EEARH, EEARL}] <= ext_eep_data_en ? ext_eep_data_in : dat_to_write;
     end
