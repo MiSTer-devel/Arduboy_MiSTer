@@ -87,7 +87,10 @@ begin
         case(addr_dat)
             EEARH_ADDR: bus_dat_out = EEARH;
             EEARL_ADDR: bus_dat_out = EEARL;
-            EEDR_ADDR: bus_dat_out = EEDR_READ;
+            // 5.3.4, "Bit 0 - EERE": the requested data is available immediately, and the
+            // datasheet's own sbi EECR,EERE / in Rd,EEDR pair depends on it. EEDR_READ is
+            // loaded from read_tmp on the EERE cycle, so on its own it is one access behind.
+            EEDR_ADDR: bus_dat_out = EECR[0] ? read_tmp : EEDR_READ;
             EECR_ADDR: bus_dat_out = EECR;
         endcase
     end
