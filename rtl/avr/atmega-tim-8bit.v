@@ -408,7 +408,12 @@ begin
                 TCNT_ADDR: TCNT <= bus_dat_in;
                 OCRA_ADDR: OCRA <= bus_dat_in;
                 OCRB_ADDR: OCRB <= bus_dat_in;
-                TIFR_ADDR: TIFR <= TIFR & ~bus_dat_in;
+                TIFR_ADDR:
+                begin
+                    if(bus_dat_in[`TOV0])  TIFR[`TOV0]  <= 1'b0;
+                    if(bus_dat_in[`OCF0A]) TIFR[`OCF0A] <= 1'b0;
+                    if(bus_dat_in[`OCF0B]) TIFR[`OCF0B] <= 1'b0;
+                end
             endcase
         end
         if(wr_dat & addr_dat == TIMSK_ADDR)

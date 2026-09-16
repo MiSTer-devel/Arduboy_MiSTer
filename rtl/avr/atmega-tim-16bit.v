@@ -639,7 +639,10 @@ begin
                 end
                 TIFR_ADDR:
                 begin
-                    TIFR <= TIFR & ~bus_dat_in;
+                    if(bus_dat_in[`TOV0])  TIFR[`TOV0]  <= 1'b0;
+                    if(bus_dat_in[`OCF0A]) TIFR[`OCF0A] <= 1'b0;
+                    if(bus_dat_in[`OCF0B]) TIFR[`OCF0B] <= 1'b0;
+                    if(bus_dat_in[`OCF0C]) TIFR[`OCF0C] <= 1'b0;
                 end
                 TIMSK_ADDR:
                 begin
