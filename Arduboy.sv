@@ -60,6 +60,7 @@ assign VIDEO_ARY = (!ar) ? (status[1] ? 8'd16 : 8'd9 ) : 12'd0;
 wire clk_sys, clk_avr;
 pll pll
 (
+    .rst(1'b0),
     .refclk(CLK_50M),
     .outclk_0(clk_sys),
     .outclk_1(clk_avr)
@@ -232,6 +233,7 @@ arduboy_board arduboy_board
 (
     .clk(clk_avr),
     .rst(reset),
+    .clk_pll(1'b0),
     .pgm_addr(pgm_addr),
     .pgm_data(pgm_data),
     .spm_pgm_addr(spm_pgm_addr),
@@ -247,6 +249,7 @@ arduboy_board arduboy_board
     .DC(oled_dc),
     .spi_scl(oled_clk),
     .spi_mosi(oled_data),
+    .spi_miso(1'b0),
     .uart_rx(USER_IN[0]),
     .uart_tx(USER_OUT[1])
 );
