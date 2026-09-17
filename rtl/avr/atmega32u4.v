@@ -873,7 +873,11 @@ atmega_eep # (
     .EEARL_ADDR('h41),
     .EEDR_ADDR('h40),
     .EECR_ADDR('h3F),
-    .EEP_SIZE(1024)
+    .EEP_SIZE(1024),
+    // 26,368 calibrated-RC cycles (Table 5-3, 3.296 ms) at this core's 16 MHz
+    // clk_avr = 52,736 core clocks.
+    .EEP_WRITE_CYCLES(52736),
+    .EEP_WRITE_CNT_WIDTH(16)
 )eep(
     .rst(rst),
     .clk(clk),
@@ -883,15 +887,16 @@ atmega_eep # (
     .bus_dat_in(core_data_out),
     .bus_dat_out(dat_eeprom_d_out),
     .int_out(int_ee_ready),
-    .int_rst(int_ee_ready_rst)
-    /*.ext_eep_addr(0),
-    .ext_eep_data_in(0),
+    .int_rst(int_ee_ready_rst),
+    // Tied off explicitly: atmega-eep.v indexes its array through
+    // ext_eep_data_en, so leaving these unconnected makes the whole EEPROM
+    // read as X in simulation. Synthesis infers 0, hardware was never affected.
+    .ext_eep_addr(17'd0),
+    .ext_eep_data_in(8'd0),
     .ext_eep_data_wr(1'b0),
-    .ext_eep_data_out(ext_eep_data_out),
+    .ext_eep_data_out(),
     .ext_eep_data_rd(1'b0),
-    .ext_eep_data_en(1'b0),
-    .content_modifyed(eep_content_modifyed),
-    .debug()*/
+    .ext_eep_data_en(1'b0)
     );
 end
 else
