@@ -710,6 +710,18 @@ begin
 						// fetch pipeline resumes on its own.
 					pgm_data_registered = held_instr;
 					holding_instr <= 1'b0;
+						// A released family instruction arms its own hold; the STEP0 casex below
+						// never sees it.
+					casex({CORE_TYPE, held_instr})
+						`INSTRUCTION_ADIW,
+						`INSTRUCTION_SBIW,
+						`INSTRUCTION_MUL,
+						`INSTRUCTION_MULS,
+						`INSTRUCTION_MULSU,
+						`INSTRUCTION_FMUL,
+						`INSTRUCTION_FMULS,
+						`INSTRUCTION_FMULSU: two_cycle_hold_next <= 1'b1;
+					endcase
 				end
 			end
 			else if(&{state_cnt == `STEP0, ~skip_next_clock, ~skip_now, ~skip_second})
