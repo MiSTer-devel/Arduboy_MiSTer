@@ -531,6 +531,27 @@ begin
                     end
                 end
             end // USE_OCRC != "TRUE"
+            // Fast PWM also acts at TOP (Table 14-2, 14.8.3). After the match blocks so
+            // OCRnx == TOP holds the constant level of Table 14-2 note 1.
+            if(TCNT == top_value)
+            begin
+                case({TCCRB[`WGM03:`WGM02], TCCRA[`WGM01:`WGM00]})
+                    4'd5, 4'd6, 4'd7, 4'd14, 4'd15:
+                    begin
+                        case(TCCRA[`COM0A1:`COM0A0])
+                            2'h2: oca <= 1'b1;
+                            2'h3: oca <= 1'b0;
+                        endcase
+                        if(USE_OCRB == "TRUE")
+                        begin
+                            case(TCCRA[`COM0B1:`COM0B0])
+                                2'h2: ocb <= 1'b1;
+                                2'h3: ocb <= 1'b0;
+                            endcase
+                        end
+                    end
+                endcase
+            end
             // TCNT overflow logick.
             if(TCNT == t_ovf_value)
             begin

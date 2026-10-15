@@ -21,11 +21,12 @@
 `timescale 1ns / 1ps
 
 //`define TIFR0 ('h00)
-`define TOV0 0
-`define OCF0A 1
-`define OCF0B 2
+// TIFR4 bit positions (15.12.13).
+`define TOV4 2
+`define OCF4A 6
+`define OCF4B 5
 `define OCF0C 3
-`define OCF0D 4
+`define OCF0D 7
 
 //`define GTCCR ('h00)
 `define PSRSYNC 0
@@ -113,8 +114,11 @@ module atmega_tim_10bit # (
     output ocrd_int,
     input ocrd_int_rst,
     output reg oca,
+    output ocan,
     output reg ocb,
+    output ocbn,
     output reg ocd,
+    output ocdn,
     output ocap_io_connect,
     output ocan_io_connect,
     output ocbp_io_connect,
@@ -184,9 +188,10 @@ begin
 end
 reg updt_ocr_on_top;
 reg updt_ocr_on_bottom;
+wire pwm_any = TCCRA[`PWMA] | TCCRA[`PWMB] | TCCRC[`PWMD];
 always @ *
 begin
-    casex({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
+    casex({pwm_any, TCCRD[`WGM01:`WGM00]})
         3'b0xx: // Imediate.
         begin
             updt_ocr_on_top = 1'b0;
@@ -205,6 +210,8 @@ begin
     endcase
 end
 
+wire pwm_mode = updt_ocr_on_top | updt_ocr_on_bottom;
+
 reg [10:0]top_value;
 always @ *
 begin
@@ -214,7 +221,7 @@ end
 reg [10:0]t_ovf_value;
 always @ *
 begin
-    case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
+    case({pwm_any, TCCRD[`WGM01:`WGM00]})
         3'b101, 3'b111: t_ovf_value = 10'h000;
         default: t_ovf_value = top_value;
     endcase
@@ -279,11 +286,11 @@ begin
         TCH <= 2'h0;
         OCRA <= 10'h000;
         OCRB <= 10'h000;
-        OCRC <= 10'h000;
+        OCRC <= 10'h0FF;
         OCRD <= 10'h000;
         OCRA_int <= 10'h000;
         OCRB_int <= 10'h000;
-        OCRC_int <= 10'h000;
+        OCRC_int <= 10'h0FF;
         OCRD_int <= 10'h000;
         TIMSK <= 8'h00;
         TIFR <= 8'h00;
@@ -305,17 +312,17 @@ begin
     begin
         if(tov_p ^ tov_n)
         begin
-            TIFR[`TOV0] <= 1'b1;
+            TIFR[`TOV4] <= 1'b1;
             tov_n <= tov_p;
         end
         if(ocra_p ^ ocra_n)
         begin
-            TIFR[`OCF0A] <= 1'b1;
+            TIFR[`OCF4A] <= 1'b1;
             ocra_n <= ocra_p;
         end
         if(ocrb_p ^ ocrb_n)
         begin
-            TIFR[`OCF0B] <= 1'b1;
+            TIFR[`OCF4B] <= 1'b1;
             ocrb_n <= ocrb_p;
         end
         if(ocrd_p ^ ocrd_n)
@@ -325,15 +332,15 @@ begin
         end
         if(tov_int_rst)
         begin
-            TIFR[`TOV0] <= 1'b0;
+            TIFR[`TOV4] <= 1'b0;
         end
         if(ocra_int_rst)
         begin
-            TIFR[`OCF0A] <= 1'b0;
+            TIFR[`OCF4A] <= 1'b0;
         end
         if(ocrb_int_rst)
         begin
-            TIFR[`OCF0B] <= 1'b0;
+            TIFR[`OCF4B] <= 1'b0;
         end
         if(ocrd_int_rst)
         begin
@@ -349,172 +356,136 @@ begin
                 {TCH, TCNTL} <= {TCH, TCNTL} - 10'd1;
             // OCRA
             if(updt_ocr_on_top ? ({TCH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCH, TCNTL} == 10'h000) : ({TCH, TCNTL} == OCRA_int)))
-                OCRA_int = OCRA;
+                OCRA_int <= OCRA;
             if(USE_OCRA == "TRUE")
             begin
                 if({TCH, TCNTL} == OCRA_int)
                 begin
-                    case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
-                        3'b101: oca <= ~oca;
-                        default:
-                        begin
-                        case(OCRA_int)
-                                10'h000:
-                                begin
-                                    case(TCCRC[`COM0D1:`COM0D0])
-                                        2'h1: ocd <= ~ocd;
-                                        default: ocd <= 1'b0;
-                                    endcase
-                                end
-                                10'h3FF:
-                                begin
-                                    case(TCCRC[`COM0D1:`COM0D0])
-                                        2'h1: ocd <= ~ocd;
-                                        default: ocd <= 1'b1;
-                                    endcase
-                                end
-                                default:
-                                begin
-                                    if(up_count)
-                                    begin
-                                        case(TCCRA[`COM0A1:`COM0A0])
-                                            2'h1: oca <= ~oca;
-                                            2'h2: oca <= 1'b0;
-                                            2'h3: oca <= 1'b1;
-                                        endcase
-                                    end
-                                    else
-                                    begin
-                                        case(TCCRA[`COM0A1:`COM0A0])
-                                            2'h1: oca <= ~oca;
-                                            2'h2: oca <= 1'b1;
-                                            2'h3: oca <= 1'b0;
-                                        endcase
-                                    end
-                                end
-                            endcase
-                        end
-                    endcase
+                    if(~TCCRA[`PWMA]) // Table 15-5.
+                    begin
+                        case(TCCRA[`COM0A1:`COM0A0])
+                            2'h1: oca <= ~oca;
+                            2'h2: oca <= 1'b0;
+                            2'h3: oca <= 1'b1;
+                        endcase
+                    end
+                    else if(up_count) // Tables 15-6 and 15-7.
+                    begin
+                        case(TCCRA[`COM0A1:`COM0A0])
+                            2'h1, 2'h2: oca <= 1'b0;
+                            2'h3: oca <= 1'b1;
+                        endcase
+                    end
+                    else
+                    begin
+                        case(TCCRA[`COM0A1:`COM0A0])
+                            2'h1, 2'h2: oca <= 1'b1;
+                            2'h3: oca <= 1'b0;
+                        endcase
+                    end
                     if(ocra_p == ocra_n && clk_active == 1'b1)
                         ocra_p <= ~ocra_p;
                 end
-                else if(TCCRD[`WGM00] & TCCRA[`PWMA] & {TCH, TCNTL} == 10'h000)
-                    oca <= 1'b0;
             end
             // !OCRA
             if(USE_OCRB == "TRUE")
             begin
                 // OCRB
                 if(updt_ocr_on_top ? ({TCH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCH, TCNTL} == 10'h000) : ({TCH, TCNTL} == OCRB_int)))
-                    OCRB_int = OCRB;
+                    OCRB_int <= OCRB;
                 if({TCH, TCNTL} == OCRB_int)
                 begin
-                    case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
-                        3'b101: ocb <= ~ocb;
-                        default:
-                        begin
-                            case(OCRB_int)
-                                10'h000:
-                                begin
-                                    case(TCCRC[`COM0D1:`COM0D0])
-                                        2'h1: ocb <= ~ocb;
-                                        default: ocb <= 1'b0;
-                                    endcase
-                                end
-                                10'h3FF:
-                                begin
-                                    case(TCCRC[`COM0D1:`COM0D0])
-                                        2'h1: ocb <= ~ocb;
-                                        default: ocb <= 1'b1;
-                                    endcase
-                                end
-                                default:
-                                begin
-                                    if(up_count)
-                                    begin
-                                        case(TCCRA[`COM0B1:`COM0B0])
-                                            2'h1: ocb <= ~ocb;
-                                            2'h2: ocb <= 1'b0;
-                                            2'h3: ocb <= 1'b1;
-                                        endcase
-                                    end
-                                    else
-                                    begin
-                                        case(TCCRA[`COM0B1:`COM0B0])
-                                            2'h1: ocb <= ~ocb;
-                                            2'h2: ocb <= 1'b1;
-                                            2'h3: ocb <= 1'b0;
-                                        endcase
-                                    end
-                                end
-                            endcase
-                        end
-                    endcase
+                    if(~TCCRA[`PWMB]) // Table 15-10.
+                    begin
+                        case(TCCRA[`COM0B1:`COM0B0])
+                            2'h1: ocb <= ~ocb;
+                            2'h2: ocb <= 1'b0;
+                            2'h3: ocb <= 1'b1;
+                        endcase
+                    end
+                    else if(up_count) // Tables 15-11 and 15-12.
+                    begin
+                        case(TCCRA[`COM0B1:`COM0B0])
+                            2'h1, 2'h2: ocb <= 1'b0;
+                            2'h3: ocb <= 1'b1;
+                        endcase
+                    end
+                    else
+                    begin
+                        case(TCCRA[`COM0B1:`COM0B0])
+                            2'h1, 2'h2: ocb <= 1'b1;
+                            2'h3: ocb <= 1'b0;
+                        endcase
+                    end
                     if(ocrb_p == ocrb_n && clk_active == 1'b1)
                         ocrb_p <= ~ocrb_p;
                 end
-                else if(TCCRD[`WGM00] & TCCRA[`PWMB] & {TCH, TCNTL} == 10'h000)
-                    oca <= 1'b0;
             end // USE_OCRB != "TRUE"
             // OCRC
             if(updt_ocr_on_top ? ({TCH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCH, TCNTL} == 10'h000) : ({TCH, TCNTL} == OCRC_int)))
             begin
-                OCRC_int = OCRC;
+                OCRC_int <= OCRC;
             end
             if(USE_OCRD == "TRUE")
             begin
                 // OCRD
                 if(updt_ocr_on_top ? ({TCH, TCNTL} == top_value) : (updt_ocr_on_bottom ? ({TCH, TCNTL} == 10'h000) : ({TCH, TCNTL} == OCRD_int)))
-                    OCRD_int = OCRD;
+                    OCRD_int <= OCRD;
                 if({TCH, TCNTL} == OCRD_int)
                 begin
-                    case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
-                        3'b101: ocd <= ~ocd;
-                        default:
-                        begin
-                            case(OCRD_int)
-                                10'h000:
-                                begin
-                                    case(TCCRC[`COM0D1:`COM0D0])
-                                        2'h1: ocd <= ~ocd;
-                                        default: ocd <= 1'b0;
-                                    endcase
-                                end
-                                10'h3FF:
-                                begin
-                                    case(TCCRC[`COM0D1:`COM0D0])
-                                        2'h1: ocd <= ~ocd;
-                                        default: ocd <= 1'b1;
-                                    endcase
-                                end
-                                default:
-                                begin
-                                    if(up_count)
-                                    begin
-                                        case(TCCRC[`COM0D1:`COM0D0])
-                                            2'h1: ocd <= ~ocd;
-                                            2'h2: ocd <= 1'b0;
-                                            2'h3: ocd <= 1'b1;
-                                        endcase
-                                    end
-                                    else
-                                    begin
-                                        case(TCCRC[`COM0D1:`COM0D0])
-                                            2'h1: ocd <= ~ocd;
-                                            2'h2: ocd <= 1'b1;
-                                            2'h3: ocd <= 1'b0;
-                                        endcase
-                                    end
-                                end
-                            endcase
-                        end
-                    endcase
+                    if(~TCCRC[`PWMD]) // Table 15-15.
+                    begin
+                        case(TCCRC[`COM0D1:`COM0D0])
+                            2'h1: ocd <= ~ocd;
+                            2'h2: ocd <= 1'b0;
+                            2'h3: ocd <= 1'b1;
+                        endcase
+                    end
+                    else if(up_count) // Tables 15-16 and 15-17.
+                    begin
+                        case(TCCRC[`COM0D1:`COM0D0])
+                            2'h1, 2'h2: ocd <= 1'b0;
+                            2'h3: ocd <= 1'b1;
+                        endcase
+                    end
+                    else
+                    begin
+                        case(TCCRC[`COM0D1:`COM0D0])
+                            2'h1, 2'h2: ocd <= 1'b1;
+                            2'h3: ocd <= 1'b0;
+                        endcase
+                    end
                     if(ocrd_p == ocrd_n && clk_active == 1'b1)
                         ocrd_p <= ~ocrd_p;
                 end
-                else if(TCCRD[`WGM00] & TCCRA[`PWMD] & {TCH, TCNTL} == 10'h000)
-                    oca <= 1'b0;
             end // USE_OCRD != "TRUE"
+            // Single-slope PWM acts at the wrap as well as on the match (15.8.2, "the
+            // timer clock cycle the counter is cleared").  After the match blocks so
+            // OCR4x == TOP holds the constant level of 15.8.2.
+            if(&{{TCH, TCNTL} == top_value, ~halt, updt_ocr_on_top})
+            begin
+                if(USE_OCRA == "TRUE" && TCCRA[`PWMA])
+                begin
+                    case(TCCRA[`COM0A1:`COM0A0])
+                        2'h1, 2'h2: oca <= 1'b1;
+                        2'h3: oca <= 1'b0;
+                    endcase
+                end
+                if(USE_OCRB == "TRUE" && TCCRA[`PWMB])
+                begin
+                    case(TCCRA[`COM0B1:`COM0B0])
+                        2'h1, 2'h2: ocb <= 1'b1;
+                        2'h3: ocb <= 1'b0;
+                    endcase
+                end
+                if(USE_OCRD == "TRUE" && TCCRC[`PWMD])
+                begin
+                    case(TCCRC[`COM0D1:`COM0D0])
+                        2'h1, 2'h2: ocd <= 1'b1;
+                        2'h3: ocd <= 1'b0;
+                    endcase
+                end
+            end
             // TCNT overflow logick.
             if(&{{TCH, TCNTL} == t_ovf_value, ~halt})
             begin
@@ -523,7 +494,7 @@ begin
             end
             if(&{{TCH, TCNTL} == top_value, ~halt})
             begin
-                case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
+                case({pwm_any, TCCRD[`WGM01:`WGM00]})
                     3'b101:
                     begin
                         up_count <= 1'b0;
@@ -534,7 +505,7 @@ begin
             end
             else if(&{{TCH, TCNTL} == 10'h000, ~halt})
             begin
-                case({TCCRB[`PWM4X], TCCRD[`WGM01:`WGM00]})
+                case({pwm_any, TCCRD[`WGM01:`WGM00]})
                     3'b101:
                     begin
                         up_count <= 1'b1;
@@ -542,6 +513,8 @@ begin
                     end
                 endcase
             end
+            if({pwm_any, TCCRD[`WGM01:`WGM00]} != 3'b101)
+                up_count <= 1'b1;
         end
         // Write registers
         clk_sys_del <= clk; // We need this because the system clk is slower than PLL clock for this timer.
@@ -573,7 +546,8 @@ begin
                         if(USE_OCRB == "TRUE")
                             OCRB <= {TMP_REG, bus_dat_in};
                     end
-                    OCRC_ADDR: OCRC <= {TMP_REG, bus_dat_in};
+                    // 15.12.10: a value below three written to OCR4C is replaced by three.
+                    OCRC_ADDR: OCRC <= ({TMP_REG, bus_dat_in} < 10'd3) ? 10'd3 : {TMP_REG, bus_dat_in};
                     OCRD_ADDR:
                     begin
                         if(USE_OCRD == "TRUE")
@@ -588,16 +562,22 @@ begin
     end
 end
 
-assign tov_int = TIFR[`TOV0] & TIMSK[`TOIE0];
-assign ocra_int = TIFR[`OCF0A] & TIMSK[`OCIE0A];
-assign ocrb_int = TIFR[`OCF0B] & TIMSK[`OCIE0B];
+assign tov_int = TIFR[`TOV4] & TIMSK[`TOIE0];
+assign ocra_int = TIFR[`OCF4A] & TIMSK[`OCIE0A];
+assign ocrb_int = TIFR[`OCF4B] & TIMSK[`OCIE0B];
 assign ocrd_int = TIFR[`OCF0D] & TIMSK[`OCIE0D];
 
+assign ocan = ~oca;
+assign ocbn = ~ocb;
+assign ocdn = ~ocd;
+
+// 15.12.1: the complementary output is connected only in a PWM mode with
+// COM4x1:0 == 01 (Tables 15-2 and 15-6; Table 15-1 disconnects it in Normal).
 assign ocap_io_connect = USE_OCRA == "TRUE" ? ((TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
-assign ocan_io_connect = USE_OCRA == "TRUE" ? ((TCCRA[`COM0A1:`COM0A0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
+assign ocan_io_connect = USE_OCRA == "TRUE" ? (pwm_mode & TCCRA[`PWMA] & (TCCRA[`COM0A1:`COM0A0] == 2'b01)) : 1'b0;
 assign ocbp_io_connect = USE_OCRB == "TRUE" ? ((TCCRA[`COM0B1:`COM0B0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
-assign ocbn_io_connect = USE_OCRB == "TRUE" ? ((TCCRA[`COM0B1:`COM0B0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
+assign ocbn_io_connect = USE_OCRB == "TRUE" ? (pwm_mode & TCCRA[`PWMB] & (TCCRA[`COM0B1:`COM0B0] == 2'b01)) : 1'b0;
 assign ocdp_io_connect = USE_OCRD == "TRUE" ? ((TCCRC[`COM0D1:`COM0D0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
-assign ocdn_io_connect = USE_OCRD == "TRUE" ? ((TCCRC[`COM0D1:`COM0D0] == 2'b00) ? 1'b0 : 1'b1) : 1'b0;
+assign ocdn_io_connect = USE_OCRD == "TRUE" ? (pwm_mode & TCCRC[`PWMD] & (TCCRC[`COM0D1:`COM0D0] == 2'b01)) : 1'b0;
 
 endmodule
