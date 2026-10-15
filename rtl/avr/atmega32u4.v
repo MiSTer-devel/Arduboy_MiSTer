@@ -171,6 +171,7 @@ wire tim3_oca;
 wire tim3_ocb;
 wire tim3_occ;
 wire tim4_oca;
+wire tim4_ocan;
 wire tim4_ocb;
 wire tim4_ocd;
 wire usb_ck_out;
@@ -190,7 +191,7 @@ assign PB7 = tim0_oca_io_connect ? ~tim0_oca : ~(pb_out[7]);
 assign PB5 = tim1_oca_io_connect ? tim1_oca : ~(pb_out[5]);
 
 // Fall through to GPIO when the timer output is disconnected, same as the RGB LED pins above.
-assign PC6 = tim3_oca_io_connect ? tim3_oca : pc_out[6];
+assign PC6 = tim3_oca_io_connect ? tim3_oca : tim4_ocan_io_connect ? tim4_ocan : pc_out[6];
 assign PC7 = tim4_ocap_io_connect ? tim4_oca : pc_out[7];
 assign PD4 = pd_out[4];
 assign PD1 = pd_out[1];
@@ -847,6 +848,7 @@ atmega_tim_10bit # (
     .ocrd_int(int_timer4_compd),
     .ocrd_int_rst(int_timer4_compd_rst),
     .oca(tim4_oca),
+    .ocan(tim4_ocan),
     .ocb(tim4_ocb),
     .ocd(tim4_ocd),
     .ocap_io_connect(tim4_ocap_io_connect),
